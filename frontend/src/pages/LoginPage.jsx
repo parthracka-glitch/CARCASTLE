@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
-import { Car, Loader2 } from "lucide-react";
+import { Car, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const { user, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const navigate = useNavigate();
@@ -118,17 +119,27 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password" className="text-[#20373B] font-medium">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB]"
-                data-testid="login-password-input"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB] pr-10"
+                  data-testid="login-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-hidden"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {err && (
@@ -151,9 +162,42 @@ export default function LoginPage() {
           </form>
 
           <Card className="mt-6 p-4 bg-[#F4FAFC] border-[#C3E7F1] text-xs text-[#20373B]/80 rounded-xl">
-            <div className="font-bold text-[#20373B] mb-1">Demo credentials</div>
-            <div className="font-mono text-[#519CAB]">admin@carcastlegoa.com · admin123</div>
-            <div className="font-mono text-[#519CAB]">operator1@carcastlegoa.com · operator123</div>
+            <div className="font-bold text-[#20373B] mb-2 flex items-center justify-between">
+              <span>Demo Quick-Fill</span>
+              <span className="text-[10px] text-[#519CAB] font-normal">Click to auto-fill</span>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail("admin@carcastlegoa.com");
+                  setPassword("admin123");
+                  setErr("");
+                }}
+                className="w-full text-left p-2 rounded-lg bg-white border border-[#C3E7F1] hover:border-[#519CAB] hover:bg-[#EBF7FA] transition cursor-pointer flex justify-between items-center"
+              >
+                <div>
+                  <div className="font-semibold text-[#20373B]">👑 Super Admin</div>
+                  <div className="font-mono text-[11px] text-[#519CAB]">admin@carcastlegoa.com</div>
+                </div>
+                <span className="text-[11px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">admin123</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail("operator1@carcastlegoa.com");
+                  setPassword("operator123");
+                  setErr("");
+                }}
+                className="w-full text-left p-2 rounded-lg bg-white border border-[#C3E7F1] hover:border-[#519CAB] hover:bg-[#EBF7FA] transition cursor-pointer flex justify-between items-center"
+              >
+                <div>
+                  <div className="font-semibold text-[#20373B]">🚗 Operator</div>
+                  <div className="font-mono text-[11px] text-[#519CAB]">operator1@carcastlegoa.com</div>
+                </div>
+                <span className="text-[11px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">operator123</span>
+              </button>
+            </div>
           </Card>
         </div>
       </div>
