@@ -1,12 +1,15 @@
 """FastAPI dependencies: auth, roles, db, activity logging."""
 import os
-from fastapi import Request, HTTPException, Depends
-from motor.motor_asyncio import AsyncIOMotorClient
-from auth import decode_token
+import logging
 from datetime import datetime, timezone
+from fastapi import Request, HTTPException, Depends
 import jwt as pyjwt
-
 import certifi
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from auth import decode_token
+
+log = logging.getLogger("carcastle")
 
 _client = None
 _db = None
@@ -15,20 +18,33 @@ _db = None
 def get_db():
     global _client, _db
     if _db is None:
-        _client = AsyncIOMotorClient(
-            os.environ["MONGO_URL"],
-            tlsCAFile=certifi.where(),
-            tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=3000
-        )
-        _db = _client[os.environ["DB_NAME"]]
+        mongo_url = os.environ.get("MONGO_URL")
+        db_name = os.environ.get("DB_NAME", "car_castle_goa")
+        
+        if mongo_url:
+            try:
+                _client = AsyncIOMotorClient(
+                    mongo_url,
+                    tlsCAFile=certifi.where(),
+                    tlsAllowInvalidCertificates=True,
+                    serverSelectionTimeoutMS=3000
+                )
+                _db = _client[db_name]
+            except Exception as e:
+                log.warning(f"Could not connect to MongoDB ({e}). Falling back to in-memory store.")
+                from mongomock_motor import AsyncMongoMockClient
+                _db = AsyncMongoMockClient()[db_name]
+        else:
+            log.warning("MONGO_URL not configured. Using in-memory database.")
+            from mongomock_motor import AsyncMongoMockClient
+            _db = AsyncMongoMockClient()[db_name]
+            
     return _db
 
 
 def set_db(new_db):
     global _db
     _db = new_db
-
 
 
 async def get_current_user(request: Request):
