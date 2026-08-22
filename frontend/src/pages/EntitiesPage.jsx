@@ -65,9 +65,9 @@ export default function EntitiesPage({ type }) {
               <Plus className="w-4 h-4 mr-1.5" /> Add New {isOwner ? "Car Owner" : "Car Driver"}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-[#20373B]">
+              <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
                 <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
                   {isOwner ? <Car className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                 </div>

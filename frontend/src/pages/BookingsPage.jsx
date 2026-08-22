@@ -141,11 +141,11 @@ export default function BookingsPage() {
               <Plus className="w-4 h-4 mr-1" /> New booking
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[88vh] overflow-y-auto p-4 sm:p-6">
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit booking" : "New booking"}</DialogTitle>
+              <DialogTitle className="text-[#20373B] font-bold text-lg">{editing ? "Edit booking" : "New booking"}</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-2">
               <Field label="Customer name">
                 <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} data-testid="booking-customer-name" />
               </Field>
@@ -260,16 +260,16 @@ export default function BookingsPage() {
         </Dialog>
       }
     >
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+      <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
+        <div className="p-3 sm:px-5 sm:py-3.5 border-b border-[#C3E7F1] flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 bg-[#F4FAFC]">
+          <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by customer, contact, plate…"
-              className="pl-9 h-9" data-testid="bookings-search" />
+              placeholder="Search customer, phone, car plate…"
+              className="pl-9 h-9 bg-white border-[#C3E7F1]" data-testid="bookings-search" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-44 h-9" data-testid="bookings-status-filter"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-44 h-9 bg-white border-[#C3E7F1]" data-testid="bookings-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="reserved">Reserved</SelectItem>

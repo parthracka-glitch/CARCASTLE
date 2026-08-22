@@ -91,7 +91,7 @@ export default function LedgerPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <TabsList className="bg-[#C3E7F1]/30 border border-[#C3E7F1]">
             <TabsTrigger value="owner" data-testid="ledger-tab-owner" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
               Car Owner Payouts
@@ -101,7 +101,7 @@ export default function LedgerPage() {
             </TabsTrigger>
           </TabsList>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-40 h-9 bg-white border-[#C3E7F1] text-[#20373B]" data-testid="ledger-status-filter"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-40 h-9 bg-white border-[#C3E7F1] text-[#20373B]" data-testid="ledger-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -111,7 +111,7 @@ export default function LedgerPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
             <div className="text-xs uppercase tracking-wider font-semibold text-[#20373B]/70">Total Owed</div>
             <div className="font-display text-2xl font-bold mt-1 font-tabular text-[#20373B]">{formatInr(totals.owed)}</div>
@@ -130,7 +130,8 @@ export default function LedgerPage() {
 
         <TabsContent value={tab}>
           <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
-            <table className="w-full text-sm" data-testid="ledger-table">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="ledger-table">
               <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
                 <tr>
                   <th className="text-left px-5 py-3 font-bold">Date</th>
@@ -182,12 +183,13 @@ export default function LedgerPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs text-[#20373B]">

@@ -237,17 +237,17 @@ export default function TransfersPage() {
           </TabsList>
 
           {/* Quick Metrics */}
-          <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-lg px-4 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 bg-white border border-slate-200 rounded-lg p-2.5 sm:px-4 sm:py-2 text-xs shadow-xs">
             <div>
               <span className="text-slate-400 font-medium">Decided Fees:</span>{" "}
               <span className="font-semibold font-tabular text-slate-900">{formatInr(totalDriverFees)}</span>
             </div>
-            <div className="h-3 w-px bg-slate-200" />
+            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
             <div>
               <span className="text-slate-400 font-medium">Driver Paid:</span>{" "}
               <span className="font-semibold font-tabular text-emerald-600">{formatInr(totalDriverPaid)}</span>
             </div>
-            <div className="h-3 w-px bg-slate-200" />
+            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
             <div>
               <span className="text-slate-400 font-medium">Driver Pending:</span>{" "}
               <span className={`font-semibold font-tabular ${totalDriverPending > 0 ? "text-red-600" : "text-slate-500"}`}>
@@ -453,9 +453,9 @@ export default function TransfersPage() {
 
       {/* CREATE NEW AIRPORT TRANSFER MODAL */}
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#20373B]">
+            <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
               <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
                 <Plane className="w-4 h-4" />
               </div>
@@ -607,9 +607,9 @@ export default function TransfersPage() {
 
       {/* EDIT DRIVER & TRANSFER MODAL */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#20373B]">
+            <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
               <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
                 <User className="w-4 h-4" />
               </div>

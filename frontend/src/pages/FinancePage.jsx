@@ -29,7 +29,7 @@ export default function FinancePage() {
   const s = summary;
   return (
     <AppLayout title="Finance & Savings" subtitle="Monthly income vs payouts, take-home profit, and auto-savings reserve.">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 stagger">
         <KpiCard
           icon={CircleDollarSign}
           badge="Total Sales"
@@ -67,11 +67,11 @@ export default function FinancePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 sm:mt-8">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs">
           <div className="font-display font-semibold text-slate-900">Monthly income vs payouts</div>
           <div className="text-xs text-slate-500 mb-3">Bars = flows · Line = net profit</div>
-          <div className="h-80">
+          <div className="h-64 sm:h-80">
             <ResponsiveContainer>
               <ComposedChart data={s.by_month}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
@@ -88,9 +88,9 @@ export default function FinancePage() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs">
           <div className="font-display font-semibold text-slate-900 mb-3">Savings accrual</div>
-          <div className="h-80">
+          <div className="h-64 sm:h-80">
             <ResponsiveContainer>
               <BarChart data={s.by_month.map((m) => ({ ...m }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
@@ -104,9 +104,10 @@ export default function FinancePage() {
         </div>
       </div>
 
-      <div className="mt-8 bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-200 font-display font-semibold">Monthly P&L breakdown</div>
-        <table className="w-full text-sm">
+      <div className="mt-6 sm:mt-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+        <div className="px-4 sm:px-5 py-3 border-b border-slate-200 font-display font-semibold text-[#20373B]">Monthly P&L breakdown</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
             <tr>
               <th className="text-left px-5 py-2.5 font-semibold">Month</th>
@@ -135,6 +136,7 @@ export default function FinancePage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </AppLayout>
   );

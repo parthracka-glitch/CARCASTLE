@@ -98,16 +98,16 @@ export default function EntityLedgerPage({ type }) {
             </div>
           )}
         </div>
-        <div className="lg:col-span-2 grid grid-cols-3 gap-4">
-          <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
+        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
             <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Owed</div>
             <div className="font-display text-2xl font-extrabold text-[#20373B] mt-2 font-tabular">{formatInr(entity.total_owed)}</div>
           </div>
-          <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
             <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Paid</div>
             <div className="font-display text-2xl font-extrabold text-emerald-600 mt-2 font-tabular">{formatInr(entity.total_paid)}</div>
           </div>
-          <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
             <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Pending Due</div>
             <div className={`font-display text-2xl font-extrabold mt-2 font-tabular ${balance > 0 ? "text-red-700" : "text-slate-500"}`}>
               {formatInr(balance)}
@@ -117,11 +117,12 @@ export default function EntityLedgerPage({ type }) {
       </div>
 
       <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
-        <div className="px-5 py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
           <div className="font-display font-bold text-[#20373B]">Payout History & Dues</div>
           <div className="text-xs text-[#519CAB] font-semibold">{entries.length} records</div>
         </div>
-        <table className="w-full text-sm" data-testid="ledger-table">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="ledger-table">
           <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
             <tr>
               <th className="text-left px-5 py-3 font-bold">Date</th>
@@ -175,10 +176,11 @@ export default function EntityLedgerPage({ type }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs text-[#20373B]">

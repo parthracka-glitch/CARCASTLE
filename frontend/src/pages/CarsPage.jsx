@@ -73,8 +73,8 @@ export default function CarsPage() {
               <Plus className="w-4 h-4 mr-1" /> New car
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>{editing ? "Edit car" : "Add new car"}</DialogTitle></DialogHeader>
+          <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+            <DialogHeader><DialogTitle className="text-[#20373B] font-bold text-lg">{editing ? "Edit car" : "Add new car"}</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5"><Label>Registration no.</Label><Input value={form.registration_no} onChange={(e) => setForm({ ...form, registration_no: e.target.value.toUpperCase() })} data-testid="car-reg-input" /></div>
               <div className="space-y-1.5"><Label>Model</Label><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} data-testid="car-model-input" /></div>
@@ -94,8 +94,9 @@ export default function CarsPage() {
         </Dialog>
       }
     >
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm" data-testid="cars-table">
+      <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="cars-table">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
             <tr>
               <th className="text-left px-5 py-2.5 font-semibold">Model</th>
@@ -123,6 +124,7 @@ export default function CarsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </AppLayout>
   );
