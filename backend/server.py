@@ -1,7 +1,14 @@
 """Car Castle Goa — main FastAPI server."""
-from dotenv import load_dotenv
+import sys
 from pathlib import Path
-load_dotenv(Path(__file__).parent / ".env")
+from dotenv import load_dotenv
+
+# Ensure backend directory is always in sys.path regardless of execution root
+BACKEND_DIR = Path(__file__).parent.resolve()
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+load_dotenv(BACKEND_DIR / ".env")
 
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
