@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { formatApiError } from "@/lib/api";
 import { Car, Loader2, Eye, EyeOff } from "lucide-react";
@@ -161,45 +160,6 @@ export default function LoginPage() {
               {busy ? <Loader2 className="w-4 h-4 animate-spin text-[#FFC64F]" /> : "Sign in"}
             </Button>
           </form>
-
-          <Card className="mt-6 p-4 bg-[#F4FAFC] border-[#C3E7F1] text-xs text-[#20373B]/80 rounded-xl">
-            <div className="font-bold text-[#20373B] mb-2 flex items-center justify-between">
-              <span>Demo Quick-Fill</span>
-              <span className="text-[10px] text-[#519CAB] font-normal">Click to auto-fill</span>
-            </div>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("admin@carcastlegoa.com");
-                  setPassword("admin123");
-                  setErr("");
-                }}
-                className="w-full text-left p-2 rounded-lg bg-white border border-[#C3E7F1] hover:border-[#519CAB] hover:bg-[#EBF7FA] transition cursor-pointer flex justify-between items-center"
-              >
-                <div>
-                  <div className="font-semibold text-[#20373B]">👑 Super Admin</div>
-                  <div className="font-mono text-[11px] text-[#519CAB]">admin@carcastlegoa.com</div>
-                </div>
-                <span className="text-[11px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">admin123</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("operator1@carcastlegoa.com");
-                  setPassword("operator123");
-                  setErr("");
-                }}
-                className="w-full text-left p-2 rounded-lg bg-white border border-[#C3E7F1] hover:border-[#519CAB] hover:bg-[#EBF7FA] transition cursor-pointer flex justify-between items-center"
-              >
-                <div>
-                  <div className="font-semibold text-[#20373B]">🚗 Operator</div>
-                  <div className="font-mono text-[11px] text-[#519CAB]">operator1@carcastlegoa.com</div>
-                </div>
-                <span className="text-[11px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">operator123</span>
-              </button>
-            </div>
-          </Card>
         </div>
       </div>
     </div>
