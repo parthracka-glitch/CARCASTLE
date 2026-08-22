@@ -20,10 +20,20 @@ const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
   car_id: "", start_date: "", end_date: "",
   pickup_location: "", drop_location: "",
+  daily_cost_rate: "", daily_customer_rate: "",
   cost_rate: "", customer_rate: "",
   transfer_type: "none", flight_time: "", transfer_pickup_point: "",
   assigned_agent_id: "", agent_fee: "0", notes: "",
 };
+
+function getDaysCount(start, end) {
+  if (!start || !end) return 1;
+  const s = new Date(start);
+  const e = new Date(end);
+  const diffTime = e.getTime() - s.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 1;
+}
 
 export default function BookingsPage() {
   const { user } = useAuth();
@@ -60,13 +70,38 @@ export default function BookingsPage() {
       (b.customer_contact || "").toLowerCase().includes(s);
   });
 
+  const days = getDaysCount(form.start_date, form.end_date);
+
+  const onStartDateChange = (val) => {
+    const newDays = getDaysCount(val, form.end_date);
+    const newCost = form.daily_cost_rate ? String(Number(form.daily_cost_rate) * newDays) : form.cost_rate;
+    const newCustomer = form.daily_customer_rate ? String(Number(form.daily_customer_rate) * newDays) : form.customer_rate;
+    setForm({ ...form, start_date: val, cost_rate: newCost, customer_rate: newCustomer });
+  };
+
+  const onEndDateChange = (val) => {
+    const newDays = getDaysCount(form.start_date, val);
+    const newCost = form.daily_cost_rate ? String(Number(form.daily_cost_rate) * newDays) : form.cost_rate;
+    const newCustomer = form.daily_customer_rate ? String(Number(form.daily_customer_rate) * newDays) : form.customer_rate;
+    setForm({ ...form, end_date: val, cost_rate: newCost, customer_rate: newCustomer });
+  };
+
   const save = async () => {
     setSaving(true);
     try {
+      const calcDays = getDaysCount(form.start_date, form.end_date);
+      const dailyCost = Number(form.daily_cost_rate || (form.cost_rate ? Number(form.cost_rate) / calcDays : 0));
+      const dailyCustomer = Number(form.daily_customer_rate || (form.customer_rate ? Number(form.customer_rate) / calcDays : 0));
+      const totalCost = Number(form.cost_rate || (dailyCost * calcDays));
+      const totalCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
+
       const payload = {
         ...form,
-        cost_rate: Number(form.cost_rate || 0),
-        customer_rate: Number(form.customer_rate || 0),
+        days: calcDays,
+        daily_cost_rate: dailyCost,
+        daily_customer_rate: dailyCustomer,
+        cost_rate: totalCost,
+        customer_rate: totalCustomer,
         agent_fee: Number(form.agent_fee || 0),
         assigned_agent_id: form.assigned_agent_id || null,
       };
@@ -87,6 +122,10 @@ export default function BookingsPage() {
 
   const openEdit = (b) => {
     setEditing(b);
+    const bDays = b.days || getDaysCount(b.start_date, b.end_date);
+    const dCost = b.daily_cost_rate || (bDays > 0 ? Number(b.cost_rate) / bDays : b.cost_rate);
+    const dCust = b.daily_customer_rate || (bDays > 0 ? Number(b.customer_rate) / bDays : b.customer_rate);
+
     setForm({
       ...empty,
       customer_name: b.customer_name || "",
@@ -97,8 +136,10 @@ export default function BookingsPage() {
       end_date: (b.end_date || "").slice(0, 10),
       pickup_location: b.pickup_location || "",
       drop_location: b.drop_location || "",
-      cost_rate: b.cost_rate ?? "",
-      customer_rate: b.customer_rate ?? "",
+      daily_cost_rate: dCost ? String(dCost) : "",
+      daily_customer_rate: dCust ? String(dCust) : "",
+      cost_rate: b.cost_rate ? String(b.cost_rate) : "",
+      customer_rate: b.customer_rate ? String(b.customer_rate) : "",
       transfer_type: b.transfer_type || "none",
       flight_time: b.flight_time || "",
       transfer_pickup_point: b.transfer_pickup_point || "",
@@ -130,6 +171,11 @@ export default function BookingsPage() {
     }
   };
 
+  const computedTotalCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
+  const computedTotalCost = form.daily_cost_rate ? Number(form.daily_cost_rate) * days : Number(form.cost_rate || 0);
+  const computedMargin = computedTotalCustomer - computedTotalCost;
+  const computedNet = computedMargin - Number(form.agent_fee || 0);
+
   return (
     <AppLayout
       title="Bookings"
@@ -147,10 +193,10 @@ export default function BookingsPage() {
             </DialogHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-2">
               <Field label="Customer name">
-                <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} data-testid="booking-customer-name" />
+                <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} data-testid="booking-customer-name" placeholder="e.g. Rajesh Sharma" />
               </Field>
               <Field label="Customer contact">
-                <Input value={form.customer_contact} onChange={(e) => setForm({ ...form, customer_contact: e.target.value })} data-testid="booking-customer-contact" />
+                <Input value={form.customer_contact} onChange={(e) => setForm({ ...form, customer_contact: e.target.value })} data-testid="booking-customer-contact" placeholder="+91 98765 43210" />
               </Field>
               <Field label="ID proof">
                 <Input value={form.customer_id_proof} onChange={(e) => setForm({ ...form, customer_id_proof: e.target.value })} placeholder="Aadhaar/DL last 4" />
@@ -158,7 +204,9 @@ export default function BookingsPage() {
               <Field label="Car">
                 <Select value={form.car_id} onValueChange={(v) => {
                   const c = cars.find((x) => x.id === v);
-                  setForm({ ...form, car_id: v, cost_rate: c?.default_cost_rate ?? form.cost_rate });
+                  const rate = c?.default_cost_rate ? String(c.default_cost_rate) : form.daily_cost_rate;
+                  const totalCost = rate ? String(Number(rate) * days) : form.cost_rate;
+                  setForm({ ...form, car_id: v, daily_cost_rate: rate, cost_rate: totalCost });
                 }}>
                   <SelectTrigger data-testid="booking-car-select"><SelectValue placeholder="Select car" /></SelectTrigger>
                   <SelectContent>
@@ -169,32 +217,89 @@ export default function BookingsPage() {
                 </Select>
               </Field>
               <Field label="Start date">
-                <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} data-testid="booking-start-date" />
+                <Input type="date" value={form.start_date} onChange={(e) => onStartDateChange(e.target.value)} data-testid="booking-start-date" />
               </Field>
               <Field label="End date">
-                <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} data-testid="booking-end-date" />
+                <Input type="date" value={form.end_date} onChange={(e) => onEndDateChange(e.target.value)} data-testid="booking-end-date" />
               </Field>
+
+              {/* Live Duration Pill */}
+              <div className="sm:col-span-2 bg-[#F4FAFC] border border-[#C3E7F1] px-3.5 py-2 rounded-xl flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#20373B] flex items-center gap-1.5">
+                  <span>⏱️ Rental Duration:</span>
+                  <span className="bg-[#20373B] text-[#FFC64F] px-2 py-0.5 rounded-md font-bold text-xs">{days} Day{days > 1 ? "s" : ""}</span>
+                </span>
+                <span className="text-[#519CAB] font-medium text-[11px]">
+                  {form.start_date ? formatDate(form.start_date) : "—"} → {form.end_date ? formatDate(form.end_date) : "—"}
+                </span>
+              </div>
+
               <Field label="Pickup location">
-                <Input value={form.pickup_location} onChange={(e) => setForm({ ...form, pickup_location: e.target.value })} />
+                <Input value={form.pickup_location} onChange={(e) => setForm({ ...form, pickup_location: e.target.value })} placeholder="e.g. MOPA Airport / Panjim" />
               </Field>
               <Field label="Drop location">
-                <Input value={form.drop_location} onChange={(e) => setForm({ ...form, drop_location: e.target.value })} />
+                <Input value={form.drop_location} onChange={(e) => setForm({ ...form, drop_location: e.target.value })} placeholder="e.g. Calangute / Airport" />
               </Field>
+
               {!isOp && (
                 <>
-                  <Field label="Owner cost rate (₹, total)">
-                    <Input type="number" value={form.cost_rate} onChange={(e) => setForm({ ...form, cost_rate: e.target.value })} data-testid="booking-cost-rate" />
+                  <Field label={`Car Owner Rate / Day (₹/day)`}>
+                    <Input
+                      type="number"
+                      value={form.daily_cost_rate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm({ ...form, daily_cost_rate: v, cost_rate: v ? String(Number(v) * days) : "" });
+                      }}
+                      data-testid="booking-daily-cost-rate"
+                      placeholder="e.g. 1800"
+                    />
+                    {form.daily_cost_rate && (
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        Total Cost: {days} days × ₹{Number(form.daily_cost_rate).toLocaleString("en-IN")} = <strong className="text-red-700 font-bold">₹{(Number(form.daily_cost_rate) * days).toLocaleString("en-IN")}</strong>
+                      </div>
+                    )}
                   </Field>
-                  <Field label="Customer rate (₹, total)">
-                    <Input type="number" value={form.customer_rate} onChange={(e) => setForm({ ...form, customer_rate: e.target.value })} data-testid="booking-customer-rate" />
+                  <Field label={`Customer Selling Rate / Day (₹/day)`}>
+                    <Input
+                      type="number"
+                      value={form.daily_customer_rate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm({ ...form, daily_customer_rate: v, customer_rate: v ? String(Number(v) * days) : "" });
+                      }}
+                      data-testid="booking-daily-customer-rate"
+                      placeholder="e.g. 2600"
+                    />
+                    {form.daily_customer_rate && (
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        Total Sales: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
+                      </div>
+                    )}
                   </Field>
                 </>
               )}
+
               {isOp && (
-                <Field label="Customer rate (₹, total)">
-                  <Input type="number" value={form.customer_rate} onChange={(e) => setForm({ ...form, customer_rate: e.target.value })} data-testid="booking-customer-rate" />
+                <Field label={`Customer Selling Rate / Day (₹/day)`}>
+                  <Input
+                    type="number"
+                    value={form.daily_customer_rate}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, daily_customer_rate: v, customer_rate: v ? String(Number(v) * days) : "" });
+                    }}
+                    data-testid="booking-daily-customer-rate"
+                    placeholder="e.g. 2600"
+                  />
+                  {form.daily_customer_rate && (
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      Total Sales: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
+                    </div>
+                  )}
                 </Field>
               )}
+
               <Field label="Airport transfer">
                 <Select value={form.transfer_type} onValueChange={(v) => setForm({ ...form, transfer_type: v })}>
                   <SelectTrigger data-testid="booking-transfer-type"><SelectValue /></SelectTrigger>
@@ -234,19 +339,36 @@ export default function BookingsPage() {
                   )}
                 </>
               )}
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <Field label="Notes">
-                  <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+                  <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Customer preferences, advance payment details..." />
                 </Field>
               </div>
-              {!isOp && form.customer_rate && form.cost_rate && (
-                <div className="col-span-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm">
-                  Auto margin: <span className="font-semibold font-tabular">{formatInr(Number(form.customer_rate) - Number(form.cost_rate))}</span>
-                  {form.agent_fee && Number(form.agent_fee) > 0 && (
-                    <> · Net profit: <span className="font-semibold font-tabular">
-                      {formatInr(Number(form.customer_rate) - Number(form.cost_rate) - Number(form.agent_fee))}
-                    </span></>
-                  )}
+
+              {/* Live Calculation Summary Banner */}
+              {!isOp && (computedTotalCustomer > 0 || computedTotalCost > 0) && (
+                <div className="sm:col-span-2 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] p-3.5 space-y-1.5 text-xs">
+                  <div className="font-bold text-[#20373B] text-xs uppercase tracking-wider mb-1">
+                    📊 Booking Financial Calculation ({days} Day{days > 1 ? "s" : ""})
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
+                    <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Customer</div>
+                      <div className="font-bold font-tabular text-[#20373B] text-sm mt-0.5">{formatInr(computedTotalCustomer)}</div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Owner Rent</div>
+                      <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost)}</div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Gross Margin</div>
+                      <div className="font-bold font-tabular text-emerald-700 text-sm mt-0.5">{formatInr(computedMargin)}</div>
+                    </div>
+                    <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                      <div className="text-[10px] text-emerald-800 font-semibold uppercase">Net Take-Home</div>
+                      <div className="font-extrabold font-tabular text-emerald-800 text-sm mt-0.5">{formatInr(computedNet)}</div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -305,8 +427,10 @@ export default function BookingsPage() {
               {/* Dates & Status */}
               <div className="flex items-center justify-between text-xs bg-[#F4FAFC] p-2.5 rounded-lg border border-[#C3E7F1]/60">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Rental Period</div>
-                  <div className="font-semibold text-slate-800">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Rental Period · <span className="text-[#519CAB] font-bold">{b.days || getDaysCount(b.start_date, b.end_date)} Day{(b.days || getDaysCount(b.start_date, b.end_date)) > 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="font-semibold text-slate-800 mt-0.5">
                     {formatDate(b.start_date)} → {formatDate(b.end_date)}
                   </div>
                 </div>
@@ -325,24 +449,34 @@ export default function BookingsPage() {
               </div>
 
               {/* Financials Strip */}
-              <div className="grid grid-cols-3 gap-2 text-center p-2 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
-                <div>
-                  <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer</div>
-                  <div className="font-bold font-tabular text-[#20373B]">{formatInr(b.customer_rate)}</div>
-                </div>
-                {!isOp && (
-                  <div>
-                    <div className="text-[9px] uppercase tracking-wider text-slate-500">Car Cost</div>
-                    <div className="font-semibold font-tabular text-red-700">{formatInr(b.cost_rate)}</div>
+              {(() => {
+                const bDays = b.days || getDaysCount(b.start_date, b.end_date);
+                const dCust = b.daily_customer_rate || (bDays > 0 ? b.customer_rate / bDays : b.customer_rate);
+                const dCost = b.daily_cost_rate || (bDays > 0 ? b.cost_rate / bDays : b.cost_rate);
+                return (
+                  <div className="grid grid-cols-3 gap-2 text-center p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer Sales</div>
+                      <div className="font-bold font-tabular text-[#20373B] text-sm">{formatInr(b.customer_rate)}</div>
+                      {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCust)}/d</div>}
+                    </div>
+                    {!isOp && (
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Owner Rent</div>
+                        <div className="font-bold font-tabular text-red-700 text-sm">{formatInr(b.cost_rate)}</div>
+                        {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCost)}/d</div>}
+                      </div>
+                    )}
+                    {!isOp && (
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Net Profit</div>
+                        <div className="font-extrabold font-tabular text-emerald-700 text-sm">{formatInr(b.margin)}</div>
+                        <div className="text-[10px] text-emerald-600 font-semibold">{bDays}d profit</div>
+                      </div>
+                    )}
                   </div>
-                )}
-                {!isOp && (
-                  <div>
-                    <div className="text-[9px] uppercase tracking-wider text-slate-500">Margin</div>
-                    <div className="font-bold font-tabular text-emerald-700">{formatInr(b.margin)}</div>
-                  </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-1">
@@ -377,60 +511,80 @@ export default function BookingsPage() {
           <table className="w-full text-sm" data-testid="bookings-table">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="text-left px-5 py-2.5 font-semibold">Dates</th>
+                <th className="text-left px-5 py-2.5 font-semibold">Dates & Duration</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Customer</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Car</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Status</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Transfer</th>
-                {!isOp && <th className="text-right px-5 py-2.5 font-semibold">Cost</th>}
-                <th className="text-right px-5 py-2.5 font-semibold">Rate</th>
-                {!isOp && <th className="text-right px-5 py-2.5 font-semibold">Margin</th>}
+                {!isOp && <th className="text-right px-5 py-2.5 font-semibold">Car Cost</th>}
+                <th className="text-right px-5 py-2.5 font-semibold">Customer Rate</th>
+                {!isOp && <th className="text-right px-5 py-2.5 font-semibold">Net Margin</th>}
                 <th className="text-right px-5 py-2.5 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((b) => (
-                <tr key={b.id} className="dense-row" data-testid={`booking-row-${b.id}`}>
-                  <td className="px-5 py-2.5 whitespace-nowrap">
-                    <div>{formatDate(b.start_date)}</div>
-                    <div className="text-xs text-slate-500">→ {formatDate(b.end_date)}</div>
-                  </td>
-                  <td className="px-5 py-2.5">
-                    <div className="font-medium text-slate-900">{b.customer_name}</div>
-                    <div className="text-xs text-slate-500">{b.customer_contact}</div>
-                  </td>
-                  <td className="px-5 py-2.5">
-                    <div className="text-slate-700">{b.car_model}</div>
-                    <div className="text-xs text-slate-500 font-mono">{b.car_registration}</div>
-                  </td>
-                  <td className="px-5 py-2.5">
-                    <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
-                      <SelectTrigger className="w-36 h-8 text-xs" data-testid={`booking-status-${b.id}`}>
-                        <SelectValue><StatusPill status={b.status} /></SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {["reserved","car_received","with_customer","returned","cancelled"].map((s) => (
-                          <SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-5 py-2.5">
-                    {b.transfer_type && b.transfer_type !== "none"
-                      ? <StatusPill status={b.transfer_status || "scheduled"} />
-                      : <span className="text-xs text-slate-400">—</span>}
-                  </td>
-                  {!isOp && <td className="px-5 py-2.5 text-right font-tabular text-slate-700">{formatInr(b.cost_rate)}</td>}
-                  <td className="px-5 py-2.5 text-right font-tabular font-medium">{formatInr(b.customer_rate)}</td>
-                  {!isOp && <td className="px-5 py-2.5 text-right font-tabular text-emerald-700 font-semibold">{formatInr(b.margin)}</td>}
-                  <td className="px-5 py-2.5 text-right whitespace-nowrap">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(b)} data-testid={`booking-edit-${b.id}`}>Edit</Button>
+              {filtered.map((b) => {
+                const bDays = b.days || getDaysCount(b.start_date, b.end_date);
+                const dCust = b.daily_customer_rate || (bDays > 0 ? b.customer_rate / bDays : b.customer_rate);
+                const dCost = b.daily_cost_rate || (bDays > 0 ? b.cost_rate / bDays : b.cost_rate);
+
+                return (
+                  <tr key={b.id} className="dense-row" data-testid={`booking-row-${b.id}`}>
+                    <td className="px-5 py-2.5 whitespace-nowrap">
+                      <div className="font-medium text-[#20373B]">{formatDate(b.start_date)} → {formatDate(b.end_date)}</div>
+                      <div className="text-xs font-bold text-[#519CAB] flex items-center gap-1 mt-0.5">
+                        <span>⏱️ {bDays} Day{bDays > 1 ? "s" : ""}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <div className="font-medium text-slate-900">{b.customer_name}</div>
+                      <div className="text-xs text-slate-500">{b.customer_contact}</div>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <div className="text-slate-700">{b.car_model}</div>
+                      <div className="text-xs text-slate-500 font-mono">{b.car_registration}</div>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
+                        <SelectTrigger className="w-36 h-8 text-xs" data-testid={`booking-status-${b.id}`}>
+                          <SelectValue><StatusPill status={b.status} /></SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["reserved","car_received","with_customer","returned","cancelled"].map((s) => (
+                            <SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      {b.transfer_type && b.transfer_type !== "none"
+                        ? <StatusPill status={b.transfer_status || "scheduled"} />
+                        : <span className="text-xs text-slate-400">—</span>}
+                    </td>
                     {!isOp && (
-                      <Button variant="ghost" size="sm" onClick={() => del(b)} className="text-red-600 hover:text-red-700" data-testid={`booking-delete-${b.id}`}>Delete</Button>
+                      <td className="px-5 py-2.5 text-right font-tabular">
+                        <div className="font-bold text-red-700">{formatInr(b.cost_rate)}</div>
+                        {bDays > 1 && <div className="text-[10px] text-slate-400">₹{Math.round(dCost)}/day</div>}
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-5 py-2.5 text-right font-tabular">
+                      <div className="font-bold text-[#20373B]">{formatInr(b.customer_rate)}</div>
+                      {bDays > 1 && <div className="text-[10px] text-slate-400">₹{Math.round(dCust)}/day</div>}
+                    </td>
+                    {!isOp && (
+                      <td className="px-5 py-2.5 text-right font-tabular">
+                        <div className="text-emerald-700 font-extrabold text-[15px]">{formatInr(b.margin)}</div>
+                      </td>
+                    )}
+                    <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(b)} data-testid={`booking-edit-${b.id}`}>Edit</Button>
+                      {!isOp && (
+                        <Button variant="ghost" size="sm" onClick={() => del(b)} className="text-red-600 hover:text-red-700" data-testid={`booking-delete-${b.id}`}>Delete</Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr><td colSpan={isOp ? 6 : 9} className="px-5 py-12 text-center text-slate-500">No bookings match your filters.</td></tr>
               )}

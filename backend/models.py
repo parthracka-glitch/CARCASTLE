@@ -91,6 +91,9 @@ class BookingCreate(BaseModel):
     car_id: str
     start_date: str  # ISO date
     end_date: str
+    days: Optional[int] = 1
+    daily_cost_rate: Optional[float] = 0.0
+    daily_customer_rate: Optional[float] = 0.0
     pickup_location: str
     drop_location: str
     cost_rate: float  # total paid to owner (₹)
@@ -114,6 +117,9 @@ class BookingUpdate(BaseModel):
     car_id: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    days: Optional[int] = None
+    daily_cost_rate: Optional[float] = None
+    daily_customer_rate: Optional[float] = None
     pickup_location: Optional[str] = None
     drop_location: Optional[str] = None
     cost_rate: Optional[float] = None
@@ -140,6 +146,9 @@ class Booking(BaseModel):
     owner_id: str
     start_date: str
     end_date: str
+    days: int = 1
+    daily_cost_rate: float = 0.0
+    daily_customer_rate: float = 0.0
     pickup_location: str
     drop_location: str
     cost_rate: float

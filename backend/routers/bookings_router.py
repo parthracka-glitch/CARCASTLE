@@ -16,6 +16,10 @@ def _sanitize_for_operator(b: dict) -> dict:
 
 async def _add_ledger_entries_for_booking(db, booking: dict, user: dict):
     """Create ledger entries for owner + optional agent."""
+    days = booking.get("days", 1)
+    daily_cost = booking.get("daily_cost_rate", booking["cost_rate"] / max(1, days))
+    days_note = f" ({days} days @ ₹{int(daily_cost):,}/day)" if days > 1 else ""
+
     # Owner payable
     owner_ledger = {
         "id": new_id(),
@@ -25,7 +29,7 @@ async def _add_ledger_entries_for_booking(db, booking: dict, user: dict):
         "amount": float(booking["cost_rate"]),
         "amount_paid": 0.0,
         "status": "pending",
-        "description": f"Booking {booking['id'][:8]} — {booking['customer_name']}",
+        "description": f"Booking {booking['id'][:8]} — {booking['customer_name']}{days_note}",
         "due_date": booking["end_date"],
         "reminders_sent": 0,
         "last_reminder_at": None,
@@ -122,15 +126,49 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
         if not agent:
             raise HTTPException(400, "Assigned agent not found")
 
+    # Compute duration in days
+    calc_days = 1
+    try:
+        s_dt = datetime.fromisoformat(str(payload.start_date)[:10])
+        e_dt = datetime.fromisoformat(str(payload.end_date)[:10])
+        diff = (e_dt - s_dt).days
+        calc_days = diff if diff > 0 else 1
+    except Exception:
+        calc_days = payload.days or 1
+
+    days = payload.days if (payload.days and payload.days > 0) else calc_days
+
+    daily_cost = float(payload.daily_cost_rate or 0)
+    daily_customer = float(payload.daily_customer_rate or 0)
+
     cost_rate = float(payload.cost_rate)
     customer_rate = float(payload.customer_rate)
+
+    # If daily rates provided, ensure total rates match daily_rate * days
+    if daily_cost > 0 and (cost_rate == daily_cost or cost_rate == 0):
+        cost_rate = daily_cost * days
+    elif cost_rate > 0 and daily_cost == 0:
+        daily_cost = cost_rate / days
+
+    if daily_customer > 0 and (customer_rate == daily_customer or customer_rate == 0):
+        customer_rate = daily_customer * days
+    elif customer_rate > 0 and daily_customer == 0:
+        daily_customer = customer_rate / days
+
     agent_fee = float(payload.agent_fee or 0)
     margin = customer_rate - cost_rate
     net_profit = margin - agent_fee
 
+    booking_dict = payload.model_dump()
+    booking_dict["days"] = days
+    booking_dict["daily_cost_rate"] = daily_cost
+    booking_dict["daily_customer_rate"] = daily_customer
+    booking_dict["cost_rate"] = cost_rate
+    booking_dict["customer_rate"] = customer_rate
+
     booking = {
         "id": new_id(),
-        **payload.model_dump(),
+        **booking_dict,
         "owner_id": car["owner_id"],
         "margin": margin,
         "net_profit": net_profit,
@@ -144,7 +182,7 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     await db.bookings.insert_one(booking)
     await _add_ledger_entries_for_booking(db, booking, user)
     await log_activity(db, user, "create", "bookings", booking["id"],
-                       {"customer": payload.customer_name, "margin": margin})
+                       {"customer": payload.customer_name, "days": days, "margin": margin})
 
     booking.pop("_id", None)
     if user["role"] == "operator":
