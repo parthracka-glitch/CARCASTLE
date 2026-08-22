@@ -64,12 +64,17 @@ async def root():
 
 app.include_router(api)
 
-# CORS — permissive for internal preview environment
-cors_origins = os.environ.get("CORS_ORIGINS", "*")
+# CORS — permissive for Vercel, localhost, and custom origins with credentials
+cors_origins = os.environ.get("CORS_ORIGINS", "")
+origins_list = [o.strip() for o in cors_origins.split(",") if o.strip()]
+if not origins_list or "*" in origins_list:
+    origins_list = ["http://localhost:3000", "http://127.0.0.1:3000", "https://carcastle-dzcb.vercel.app"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in cors_origins.split(",")] if cors_origins != "*" else ["*"],
-    allow_credentials=True if cors_origins != "*" else False,
+    allow_origins=origins_list,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
