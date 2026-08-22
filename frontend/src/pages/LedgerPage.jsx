@@ -130,7 +130,70 @@ export default function LedgerPage() {
 
         <TabsContent value={tab}>
           <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+            {/* 📱 Mobile Payout Cards (<sm) */}
+            <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
+              {rows.map((e) => {
+                const bal = Math.max(0, Number(e.amount || 0) - Number(e.amount_paid || 0));
+                return (
+                  <div key={e.id} className="p-3.5 space-y-2 bg-white" data-testid={`ledger-mobile-card-${e.id}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-bold text-[#20373B] text-base">{e.entity_name}</div>
+                        <div className="text-xs text-slate-600 font-medium">{e.description}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{formatDate(e.created_at)}</div>
+                      </div>
+                      <StatusPill status={e.status} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-center p-2 rounded-lg bg-[#F4FAFC] border border-[#C3E7F1]/60 text-xs">
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-400">Total Cost</div>
+                        <div className="font-bold font-tabular text-[#20373B]">{formatInr(e.amount)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-400">Pending Due</div>
+                        <div className={`font-bold font-tabular ${bal > 0 ? "text-red-600" : "text-slate-500"}`}>
+                          {formatInr(bal)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {e.status !== "paid" ? (
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openPay(e)}
+                          className="h-8 text-xs font-semibold border-[#519CAB] text-[#20373B]"
+                          data-testid={`ledger-mobile-pay-${e.id}`}
+                        >
+                          <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay Settlement
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => remind(e)}
+                          className="h-8 text-xs text-[#519CAB]"
+                          data-testid={`ledger-mobile-remind-${e.id}`}
+                        >
+                          <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-right text-xs text-emerald-600 font-semibold flex items-center justify-end gap-1 pt-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {rows.length === 0 && (
+                <div className="p-8 text-center text-slate-500 text-sm">No payout records found.</div>
+              )}
+            </div>
+
+            {/* 💻 Tablet & Desktop Table View (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm" data-testid="ledger-table">
               <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
                 <tr>

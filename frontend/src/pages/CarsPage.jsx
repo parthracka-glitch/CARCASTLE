@@ -95,7 +95,45 @@ export default function CarsPage() {
       }
     >
       <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        {/* 📱 Mobile Car Cards (<sm) */}
+        <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
+          {rows.map((c) => (
+            <div key={c.id} className="p-3.5 space-y-2 bg-white">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-bold text-[#20373B] text-base">{c.model}</div>
+                  <div className="text-xs text-slate-500 font-medium mt-0.5">
+                    Owner: <span className="font-semibold text-slate-700">{c.owner_name}</span>
+                  </div>
+                </div>
+                <span className="inline-block px-2.5 py-1 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-xs font-mono font-bold text-[#20373B]">
+                  {c.registration_no}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <div>
+                  <span className="text-slate-400">Default Rate: </span>
+                  <span className="font-bold font-tabular text-[#20373B]">{formatInr(c.default_cost_rate)}/day</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(c)} className="h-7 text-xs border-[#C3E7F1]">
+                    Edit
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => del(c)} className="h-7 text-xs text-red-600 hover:bg-red-50">
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && (
+            <div className="p-8 text-center text-slate-500 text-sm">No cars registered yet.</div>
+          )}
+        </div>
+
+        {/* 💻 Tablet & Desktop Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm" data-testid="cars-table">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
             <tr>

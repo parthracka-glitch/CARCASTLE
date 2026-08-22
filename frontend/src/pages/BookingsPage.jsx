@@ -280,7 +280,100 @@ export default function BookingsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="overflow-x-auto">
+        {/* 📱 Mobile Cards View (<sm) */}
+        <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
+          {filtered.map((b) => (
+            <div key={b.id} className="p-3.5 space-y-2.5 bg-white" data-testid={`booking-card-${b.id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-bold text-[#20373B] text-base leading-snug">{b.customer_name}</div>
+                  <a
+                    href={`tel:${b.customer_contact}`}
+                    className="text-xs text-[#519CAB] font-semibold flex items-center gap-1 mt-0.5"
+                  >
+                    📞 {b.customer_contact}
+                  </a>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
+                    {b.car_registration}
+                  </span>
+                  <div className="text-[11px] text-slate-500 font-medium">{b.car_model}</div>
+                </div>
+              </div>
+
+              {/* Dates & Status */}
+              <div className="flex items-center justify-between text-xs bg-[#F4FAFC] p-2.5 rounded-lg border border-[#C3E7F1]/60">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Rental Period</div>
+                  <div className="font-semibold text-slate-800">
+                    {formatDate(b.start_date)} → {formatDate(b.end_date)}
+                  </div>
+                </div>
+                <div>
+                  <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
+                    <SelectTrigger className="h-7 w-32 text-xs bg-white border-[#C3E7F1]" data-testid={`booking-mobile-status-${b.id}`}>
+                      <SelectValue><StatusPill status={b.status} /></SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["reserved","car_received","with_customer","returned","cancelled"].map((s) => (
+                        <SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Financials Strip */}
+              <div className="grid grid-cols-3 gap-2 text-center p-2 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
+                <div>
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer</div>
+                  <div className="font-bold font-tabular text-[#20373B]">{formatInr(b.customer_rate)}</div>
+                </div>
+                {!isOp && (
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-500">Car Cost</div>
+                    <div className="font-semibold font-tabular text-red-700">{formatInr(b.cost_rate)}</div>
+                  </div>
+                )}
+                {!isOp && (
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-500">Margin</div>
+                    <div className="font-bold font-tabular text-emerald-700">{formatInr(b.margin)}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEdit(b)}
+                  className="h-8 text-xs font-semibold border-[#C3E7F1] text-[#20373B]"
+                >
+                  Edit Booking
+                </Button>
+                {!isOp && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => del(b)}
+                    className="h-8 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="p-8 text-center text-slate-500 text-sm">No bookings match your filters.</div>
+          )}
+        </div>
+
+        {/* 💻 Desktop & Tablet Table View (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm" data-testid="bookings-table">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
               <tr>

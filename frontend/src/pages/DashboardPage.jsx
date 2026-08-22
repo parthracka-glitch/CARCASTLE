@@ -259,33 +259,63 @@ function RecentTable({ rows, isOperator }) {
     return <div className="p-8 text-center text-sm text-slate-500">No bookings yet.</div>;
   }
   return (
-    <table className="w-full text-sm" data-testid="recent-bookings-table">
-      <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
-        <tr>
-          <th className="text-left px-5 py-3 font-bold">Start</th>
-          <th className="text-left px-5 py-3 font-bold">Customer</th>
-          <th className="text-left px-5 py-3 font-bold">Car</th>
-          <th className="text-left px-5 py-3 font-bold">Status</th>
-          {!isOperator && <th className="text-right px-5 py-3 font-bold">Cost</th>}
-          <th className="text-right px-5 py-3 font-bold">Rate</th>
-          {!isOperator && <th className="text-right px-5 py-3 font-bold">Margin</th>}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-[#C3E7F1]/50">
+    <>
+      {/* 📱 Mobile Cards View (<sm) */}
+      <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
         {rows.map((b) => (
-          <tr key={b.id} className="dense-row hover:bg-[#C3E7F1]/20 transition-colors">
-            <td className="px-5 py-3 text-slate-700">{formatDate(b.start_date)}</td>
-            <td className="px-5 py-3 font-semibold text-[#20373B]">{b.customer_name}</td>
-            <td className="px-5 py-3 text-slate-600">
-              {b.car_model} <span className="text-[#519CAB] font-mono text-xs ml-1">{b.car_registration}</span>
-            </td>
-            <td className="px-5 py-3"><StatusPill status={b.status} /></td>
-            {!isOperator && <td className="px-5 py-3 text-right font-tabular text-slate-700">{formatInr(b.cost_rate)}</td>}
-            <td className="px-5 py-3 text-right font-tabular font-bold text-[#20373B]">{formatInr(b.customer_rate)}</td>
-            {!isOperator && <td className="px-5 py-3 text-right font-tabular text-[#519CAB] font-bold">{formatInr(b.margin)}</td>}
-          </tr>
+          <div key={b.id} className="p-3.5 space-y-2 bg-white">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-bold text-[#20373B] text-sm">{b.customer_name}</div>
+                <div className="text-xs text-slate-500">{b.car_model} · <span className="font-mono text-[#519CAB]">{b.car_registration}</span></div>
+              </div>
+              <StatusPill status={b.status} />
+            </div>
+
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+              <span className="text-slate-500">{formatDate(b.start_date)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 font-tabular font-medium">Rate: {formatInr(b.customer_rate)}</span>
+                {!isOperator && (
+                  <span className="font-bold text-emerald-700 font-tabular">Net: {formatInr(b.margin)}</span>
+                )}
+              </div>
+            </div>
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+
+      {/* 💻 Desktop Table View (hidden sm:block) */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full text-sm" data-testid="recent-bookings-table">
+          <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
+            <tr>
+              <th className="text-left px-5 py-3 font-bold">Start</th>
+              <th className="text-left px-5 py-3 font-bold">Customer</th>
+              <th className="text-left px-5 py-3 font-bold">Car</th>
+              <th className="text-left px-5 py-3 font-bold">Status</th>
+              {!isOperator && <th className="text-right px-5 py-3 font-bold">Cost</th>}
+              <th className="text-right px-5 py-3 font-bold">Rate</th>
+              {!isOperator && <th className="text-right px-5 py-3 font-bold">Margin</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#C3E7F1]/50">
+            {rows.map((b) => (
+              <tr key={b.id} className="dense-row hover:bg-[#C3E7F1]/20 transition-colors">
+                <td className="px-5 py-3 text-slate-700">{formatDate(b.start_date)}</td>
+                <td className="px-5 py-3 font-semibold text-[#20373B]">{b.customer_name}</td>
+                <td className="px-5 py-3 text-slate-600">
+                  {b.car_model} <span className="text-[#519CAB] font-mono text-xs ml-1">{b.car_registration}</span>
+                </td>
+                <td className="px-5 py-3"><StatusPill status={b.status} /></td>
+                {!isOperator && <td className="px-5 py-3 text-right font-tabular text-slate-700">{formatInr(b.cost_rate)}</td>}
+                <td className="px-5 py-3 text-right font-tabular font-bold text-[#20373B]">{formatInr(b.customer_rate)}</td>
+                {!isOperator && <td className="px-5 py-3 text-right font-tabular text-[#519CAB] font-bold">{formatInr(b.margin)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
