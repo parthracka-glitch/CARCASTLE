@@ -11,8 +11,6 @@ import {
   Plane,
   LineChart,
   FileBarChart,
-  History,
-  ScrollText,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -24,10 +22,9 @@ const nav = [
   { to: "/owners", icon: Users, label: "Car Owners", roles: ["super_admin", "operator"] },
   { to: "/agents", icon: UserCog, label: "Car Drivers", roles: ["super_admin"] },
   { to: "/cars", icon: Car, label: "Cars", roles: ["super_admin"] },
-  { to: "/ledger", icon: Wallet, label: "Ledger", roles: ["super_admin"] },
+  { to: "/ledger", icon: Wallet, label: "Payouts & Dues", roles: ["super_admin"] },
   { to: "/finance", icon: LineChart, label: "Finance & Savings", roles: ["super_admin"] },
   { to: "/reports", icon: FileBarChart, label: "Reports", roles: ["super_admin"] },
-  { to: "/rate-history", icon: History, label: "Rate History", roles: ["super_admin"] },
   { to: "/settings", icon: Settings, label: "Settings", roles: ["super_admin"] },
 ];
 

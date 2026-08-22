@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Bell, IndianRupee, Loader2, User, Phone } from "lucide-react";
+import { Bell, IndianRupee, Loader2, User, Phone, CheckCircle2 } from "lucide-react";
 
 export default function EntityLedgerPage({ type }) {
   const isOwner = type === "owner";
@@ -66,8 +66,8 @@ export default function EntityLedgerPage({ type }) {
 
   if (loading || !entity) {
     return (
-      <AppLayout title="Ledger">
-        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+      <AppLayout title="Payout Statement">
+        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="w-4 h-4 animate-spin text-[#519CAB]" /> Loading…</div>
       </AppLayout>
     );
   }
@@ -75,7 +75,7 @@ export default function EntityLedgerPage({ type }) {
   const balance = Number(entity.total_owed) - Number(entity.total_paid);
 
   return (
-    <AppLayout title={entity.name} subtitle={isOwner ? "Car owner ledger" : "Car driver ledger"}>
+    <AppLayout title={entity.name} subtitle={isOwner ? "Car owner payout statement & dues" : "Car driver payout statement & dues"}>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="bg-white border border-[#C3E7F1] rounded-xl p-6 lg:col-span-1 shadow-xs">
           <div className="w-14 h-14 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center">
@@ -100,15 +100,15 @@ export default function EntityLedgerPage({ type }) {
         </div>
         <div className="lg:col-span-2 grid grid-cols-3 gap-4">
           <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
-            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime owed</div>
+            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Owed</div>
             <div className="font-display text-2xl font-extrabold text-[#20373B] mt-2 font-tabular">{formatInr(entity.total_owed)}</div>
           </div>
           <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
-            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime paid</div>
-            <div className="font-display text-2xl font-extrabold text-[#519CAB] mt-2 font-tabular">{formatInr(entity.total_paid)}</div>
+            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Paid</div>
+            <div className="font-display text-2xl font-extrabold text-emerald-600 mt-2 font-tabular">{formatInr(entity.total_paid)}</div>
           </div>
           <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
-            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Current balance</div>
+            <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Pending Due</div>
             <div className={`font-display text-2xl font-extrabold mt-2 font-tabular ${balance > 0 ? "text-red-700" : "text-slate-500"}`}>
               {formatInr(balance)}
             </div>
@@ -118,24 +118,24 @@ export default function EntityLedgerPage({ type }) {
 
       <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
         <div className="px-5 py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
-          <div className="font-display font-bold text-[#20373B]">Ledger entries</div>
-          <div className="text-xs text-[#519CAB] font-semibold">{entries.length} entries</div>
+          <div className="font-display font-bold text-[#20373B]">Payout History & Dues</div>
+          <div className="text-xs text-[#519CAB] font-semibold">{entries.length} records</div>
         </div>
         <table className="w-full text-sm" data-testid="ledger-table">
           <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
             <tr>
-              <th className="text-left px-5 py-3 font-bold">Created</th>
+              <th className="text-left px-5 py-3 font-bold">Date</th>
               <th className="text-left px-5 py-3 font-bold">Description</th>
               <th className="text-right px-5 py-3 font-bold">Amount</th>
               <th className="text-right px-5 py-3 font-bold">Paid</th>
-              <th className="text-right px-5 py-3 font-bold">Balance</th>
+              <th className="text-right px-5 py-3 font-bold">Pending Due</th>
               <th className="text-left px-5 py-3 font-bold">Status</th>
               <th className="text-right px-5 py-3 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#C3E7F1]/50">
             {entries.map((e) => {
-              const bal = Number(e.amount) - Number(e.amount_paid);
+              const bal = Math.max(0, Number(e.amount) - Number(e.amount_paid));
               return (
                 <tr key={e.id} className="dense-row hover:bg-[#C3E7F1]/20 transition-colors" data-testid={`ledger-row-${e.id}`}>
                   <td className="px-5 py-3 text-slate-600">{formatDate(e.created_at)}</td>
@@ -148,53 +148,55 @@ export default function EntityLedgerPage({ type }) {
                     )}
                   </td>
                   <td className="px-5 py-3 text-right font-tabular font-medium">{formatInr(e.amount)}</td>
-                  <td className="px-5 py-3 text-right font-tabular font-bold text-[#519CAB]">{formatInr(e.amount_paid)}</td>
+                  <td className="px-5 py-3 text-right font-tabular font-bold text-emerald-600">{formatInr(e.amount_paid)}</td>
                   <td className={`px-5 py-3 text-right font-tabular font-bold ${bal > 0 ? "text-red-700" : "text-slate-500"}`}>{formatInr(bal)}</td>
                   <td className="px-5 py-3"><StatusPill status={e.status} /></td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
-                    {e.status !== "paid" && (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => openPay(e)} className="text-[#519CAB] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-pay-${e.id}`}>
-                          <IndianRupee className="w-3.5 h-3.5" /> Pay
+                    {e.status !== "paid" ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="outline" size="sm" onClick={() => openPay(e)} className="h-8 border-[#519CAB] text-[#20373B] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-pay-${e.id}`}>
+                          <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => remind(e)} className="text-[#519CAB] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-remind-${e.id}`}>
-                          <Bell className="w-3.5 h-3.5" /> Remind
+                        <Button variant="ghost" size="sm" onClick={() => remind(e)} className="h-8 text-[#519CAB] hover:bg-[#C3E7F1]/20 font-semibold" data-testid={`ledger-remind-${e.id}`}>
+                          <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
                         </Button>
-                      </>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
+                      </span>
                     )}
                   </td>
                 </tr>
               );
             })}
             {entries.length === 0 && (
-              <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No ledger entries yet.</td></tr>
+              <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No payout records yet.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record payment</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="text-sm text-[#20373B]">
-              {payEntry?.description} — outstanding <span className="font-bold font-tabular text-red-600">
-                {payEntry && formatInr(Number(payEntry.amount) - Number(payEntry.amount_paid))}
-              </span>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs text-[#20373B]">
+              <strong>Details:</strong> {payEntry?.description}
             </div>
             <div className="space-y-1.5">
-              <Label>Amount (₹)</Label>
-              <Input type="number" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} data-testid="pay-amount-input" />
+              <Label>Payment Amount (₹)</Label>
+              <Input type="number" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} placeholder="Amount" />
             </div>
             <div className="space-y-1.5">
-              <Label>Note</Label>
-              <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. UPI, Cash" data-testid="pay-note-input" />
+              <Label>Payment Method / Note</Label>
+              <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. GPay, PhonePe, Cash..." />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
-            <Button onClick={submitPay} className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold" data-testid="pay-submit-button">Record payment</Button>
-          </DialogFooter>ooter>
+            <Button onClick={submitPay} className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold">Confirm Payment</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>

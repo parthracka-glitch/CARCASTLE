@@ -17,7 +17,7 @@ import {
   Legend,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, CircleDollarSign, TrendingUp, Clock, ShieldCheck } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -34,15 +34,17 @@ export default function DashboardPage() {
       try {
         if (!isOperator) {
           const [s, r] = await Promise.all([
-            api.get("/finance/summary"),
-            api.get("/bookings", { params: { } }),
+            api.get("/finance/summary").catch(() => ({ data: null })),
+            api.get("/bookings", { params: { } }).catch(() => ({ data: [] })),
           ]);
-          setSummary(s.data);
-          setRecent(r.data.slice(0, 8));
+          if (s?.data && typeof s.data === "object") setSummary(s.data);
+          if (Array.isArray(r?.data)) setRecent(r.data.slice(0, 8));
         } else {
-          const r = await api.get("/bookings");
-          setRecent(r.data.slice(0, 12));
+          const r = await api.get("/bookings").catch(() => ({ data: [] }));
+          if (Array.isArray(r?.data)) setRecent(r.data.slice(0, 12));
         }
+      } catch (err) {
+        console.error("Dashboard load error:", err);
       } finally {
         setLoading(false);
       }
@@ -52,10 +54,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (isOperator) return;
     (async () => {
-      const { data } = await api.get("/finance/margin-timeseries", {
-        params: { granularity: gran },
-      });
-      setSeries(data);
+      try {
+        const { data } = await api.get("/finance/margin-timeseries", {
+          params: { granularity: gran },
+        });
+        if (Array.isArray(data)) setSeries(data);
+      } catch (err) {
+        console.error("Series load error:", err);
+      }
     })();
   }, [gran, isOperator]);
 
@@ -116,36 +122,71 @@ export default function DashboardPage() {
 
   const s = summary || {};
   return (
-    <AppLayout title="Dashboard" subtitle="Live view of margin, payables and savings.">
+    <AppLayout title="Dashboard" subtitle="Overview of customer sales, net earnings, owner dues, and savings.">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
         <KpiCard
-          label="Total Margin"
-          value={formatInr(s.total_margin)}
-          sub={`${s.booking_count || 0} bookings all-time`}
-          tone="positive"
-          testid="kpi-total-margin"
+          icon={CircleDollarSign}
+          badge="Total Sales"
+          label="Customer Revenue"
+          value={formatInr(s.total_income)}
+          sub={`Total collected from customers across ${s.booking_count || 0} bookings`}
+          tone="default"
+          testid="kpi-customer-revenue"
         />
         <KpiCard
-          label="Net Profit"
+          icon={TrendingUp}
+          badge="Your Earnings"
+          label="Net Profit (Take-Home)"
           value={formatInr(s.total_net_profit)}
-          sub="After driver fees"
+          sub="What you keep after paying car rent & driver fees"
           tone="positive"
           testid="kpi-net-profit"
         />
         <KpiCard
-          label="Owner Payables"
+          icon={Clock}
+          badge="Unpaid Balance"
+          label="Pending to Car Owners"
           value={formatInr(s.owner_pending)}
-          sub="Outstanding to owners"
+          sub="Car rental payout balance you still need to pay"
           tone="negative"
           testid="kpi-owner-payables"
         />
         <KpiCard
-          label={`Savings @ ${s.savings_percent || 10}%`}
+          icon={ShieldCheck}
+          badge={`${s.savings_percent || 10}% Saved`}
+          label="Auto Savings Reserve"
           value={formatInr(s.savings_accrued)}
-          sub={`Driver fees pending: ${formatInr(s.agent_pending)}`}
+          sub={`Auto-saved from profit · Driver pending: ${formatInr(s.agent_pending)}`}
           tone="warn"
           testid="kpi-savings"
         />
+      </div>
+
+      {/* Money Flow Visual Breakdown */}
+      <div className="mt-4 p-4 bg-white border border-[#C3E7F1] rounded-xl shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 font-bold text-[#20373B] shrink-0">
+          <div className="w-6 h-6 rounded-md bg-[#FFC64F]/30 text-[#20373B] flex items-center justify-center font-bold">
+            ₹
+          </div>
+          <span>Money Flow Summary:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-slate-600 text-xs">
+          <span className="bg-[#F4FAFC] border border-[#C3E7F1] px-2.5 py-1 rounded-md">
+            Customer Revenue: <strong className="text-[#20373B] font-tabular">{formatInr(s.total_income)}</strong>
+          </span>
+          <span className="text-[#519CAB] font-bold">−</span>
+          <span className="bg-red-50 text-red-800 border border-red-200 px-2.5 py-1 rounded-md">
+            Car Rent (Cost): <strong className="font-tabular">{formatInr(s.total_owner_cost)}</strong>
+          </span>
+          <span className="text-[#519CAB] font-bold">−</span>
+          <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-md">
+            Driver Fees: <strong className="font-tabular">{formatInr(s.total_agent_fee)}</strong>
+          </span>
+          <span className="text-[#519CAB] font-bold">=</span>
+          <span className="bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-md border border-emerald-200">
+            Your Net Profit: <strong className="font-tabular">{formatInr(s.total_net_profit)}</strong>
+          </span>
+        </div>
       </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">

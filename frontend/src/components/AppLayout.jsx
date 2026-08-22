@@ -1,6 +1,5 @@
 import React from "react";
 import Sidebar from "@/components/Sidebar";
-import { Car } from "lucide-react";
 
 export default function AppLayout({ children, title, subtitle, actions }) {
   return (

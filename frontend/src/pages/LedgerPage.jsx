@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Bell, IndianRupee, BookOpen, HelpCircle, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Bell, IndianRupee, Wallet, HelpCircle, CheckCircle2 } from "lucide-react";
 
 export default function LedgerPage() {
   const [tab, setTab] = useState("owner");
@@ -57,51 +57,51 @@ export default function LedgerPage() {
   };
 
   const totals = rows.reduce((acc, e) => {
-    acc.owed += Number(e.amount);
-    acc.paid += Number(e.amount_paid);
-    acc.balance += Number(e.amount) - Number(e.amount_paid);
+    acc.owed += Number(e.amount || 0);
+    acc.paid += Number(e.amount_paid || 0);
+    acc.balance += Number(e.amount || 0) - Number(e.amount_paid || 0);
     return acc;
   }, { owed: 0, paid: 0, balance: 0 });
 
   return (
-    <AppLayout title="Ledger" subtitle="Financial Accounts Payable — track and settle all payments to Owners & Agents.">
+    <AppLayout title="Payouts & Dues" subtitle="Track & settle pending payments to Car Owners and Drivers.">
       
       {/* Informative Explanation Banner */}
-      <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="mb-6 p-5 rounded-xl bg-[#20373B] text-white shadow-md border border-[#2C494E] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-orange-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-            <BookOpen className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-lg bg-[#FFC64F] text-[#20373B] flex items-center justify-center shrink-0 shadow-md mt-0.5 font-bold">
+            <Wallet className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-display font-semibold text-white flex items-center gap-2">
-              What is the Financial Ledger?
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-orange-400 font-normal border border-slate-600">
-                Accounts Payable Book
+            <h3 className="font-display font-bold text-white flex items-center gap-2 text-base">
+              What is Payouts & Dues?
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#519CAB]/30 text-[#FFC64F] font-medium border border-[#519CAB]/40">
+                Payment Tracking
               </span>
             </h3>
-            <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-              The <strong>Ledger</strong> automatically tracks every rupee your business owes. When a booking is created, the system auto-logs the <em>Owner's vehicle cost payout</em> or the <em>Agent's referral commission</em>. Use this screen to record settlements (UPI/Cash) and send payment reminders.
+            <p className="text-xs text-[#C3E7F1] mt-1 max-w-3xl leading-relaxed">
+              This screen tracks what you owe to <strong>Car Owners</strong> (vehicle rent) and <strong>Car Drivers</strong> (transfer fees). Every time a booking is created, the system auto-calculates the payout. Use this screen to record settlements (UPI/Cash/Bank) and send payment reminders.
             </p>
           </div>
         </div>
-        <div className="text-xs font-medium text-slate-300 flex items-center gap-1.5 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 shrink-0">
-          <HelpCircle className="w-4 h-4 text-orange-400" />
-          <span>Auto-generated per booking</span>
+        <div className="text-xs font-medium text-[#C3E7F1] flex items-center gap-1.5 bg-[#16272A]/80 px-3 py-1.5 rounded-lg border border-[#2C494E] shrink-0">
+          <HelpCircle className="w-4 h-4 text-[#FFC64F]" />
+          <span>Auto-calculated per booking</span>
         </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="flex items-center justify-between mb-4">
-          <TabsList className="bg-slate-100">
-            <TabsTrigger value="owner" data-testid="ledger-tab-owner" className="data-[state=active]:bg-white">
-              Car Owner Payables
+          <TabsList className="bg-[#C3E7F1]/30 border border-[#C3E7F1]">
+            <TabsTrigger value="owner" data-testid="ledger-tab-owner" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
+              Car Owner Payouts
             </TabsTrigger>
-            <TabsTrigger value="agent" data-testid="ledger-tab-agent" className="data-[state=active]:bg-white">
+            <TabsTrigger value="agent" data-testid="ledger-tab-agent" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
               Car Driver Fees
             </TabsTrigger>
           </TabsList>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-40 h-9 bg-white" data-testid="ledger-status-filter"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-40 h-9 bg-white border-[#C3E7F1] text-[#20373B]" data-testid="ledger-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -111,17 +111,17 @@ export default function LedgerPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">Total Owed</div>
-            <div className="font-display text-2xl font-bold mt-1 font-tabular text-slate-900">{formatInr(totals.owed)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
+            <div className="text-xs uppercase tracking-wider font-semibold text-[#20373B]/70">Total Owed</div>
+            <div className="font-display text-2xl font-bold mt-1 font-tabular text-[#20373B]">{formatInr(totals.owed)}</div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">Total Settled (Paid)</div>
-            <div className="font-display text-2xl font-bold text-emerald-700 mt-1 font-tabular">{formatInr(totals.paid)}</div>
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
+            <div className="text-xs uppercase tracking-wider font-semibold text-[#20373B]/70">Total Settled (Paid)</div>
+            <div className="font-display text-2xl font-bold text-emerald-600 mt-1 font-tabular">{formatInr(totals.paid)}</div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">Net Outstanding Balance</div>
+          <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
+            <div className="text-xs uppercase tracking-wider font-semibold text-[#20373B]/70">Current Pending Balance</div>
             <div className={`font-display text-2xl font-bold mt-1 font-tabular ${totals.balance > 0 ? "text-red-600" : "text-slate-500"}`}>
               {formatInr(totals.balance)}
             </div>
@@ -134,17 +134,17 @@ export default function LedgerPage() {
               <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
                 <tr>
                   <th className="text-left px-5 py-3 font-bold">Date</th>
-                  <th className="text-left px-5 py-3 font-bold">Entity</th>
+                  <th className="text-left px-5 py-3 font-bold">Recipient</th>
                   <th className="text-left px-5 py-3 font-bold">Description</th>
-                  <th className="text-right px-5 py-3 font-bold">Amount</th>
-                  <th className="text-right px-5 py-3 font-bold">Pending</th>
+                  <th className="text-right px-5 py-3 font-bold">Total Cost</th>
+                  <th className="text-right px-5 py-3 font-bold">Pending Due</th>
                   <th className="text-left px-5 py-3 font-bold">Status</th>
                   <th className="text-right px-5 py-3 font-bold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#C3E7F1]/50">
                 {rows.map((e) => {
-                  const bal = Number(e.amount || 0) - Number(e.paid_amount || 0);
+                  const bal = Math.max(0, Number(e.amount || 0) - Number(e.amount_paid || 0));
                   return (
                     <tr key={e.id} className="dense-row hover:bg-[#C3E7F1]/20 transition-colors">
                       <td className="px-5 py-3 text-slate-600">{formatDate(e.created_at)}</td>
@@ -155,7 +155,7 @@ export default function LedgerPage() {
                       <td className="px-5 py-3"><StatusPill status={e.status} /></td>
                       <td className="px-5 py-3 text-right whitespace-nowrap">
                         {e.status !== "paid" ? (
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button variant="outline" size="sm" onClick={() => openPay(e)} className="h-8 border-[#519CAB] text-[#20373B] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-full-pay-${e.id}`}>
                               <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay
                             </Button>
@@ -164,7 +164,7 @@ export default function LedgerPage() {
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-xs text-[#519CAB] font-semibold inline-flex items-center gap-1">
+                          <span className="text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
                           </span>
                         )}
@@ -175,8 +175,8 @@ export default function LedgerPage() {
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-5 py-14 text-center text-slate-500">
-                      <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <div className="font-semibold text-slate-700">No ledger entries found</div>
+                      <Wallet className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <div className="font-semibold text-slate-700">No payout records found</div>
                     </td>
                   </tr>
                 )}
@@ -191,7 +191,7 @@ export default function LedgerPage() {
           <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs text-[#20373B]">
-              <strong>Entity:</strong> {payEntry?.entity_name}<br />
+              <strong>Recipient:</strong> {payEntry?.entity_name}<br />
               <strong>Details:</strong> {payEntry?.description}
             </div>
             <div className="space-y-1.5">

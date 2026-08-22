@@ -5,7 +5,7 @@ import { api, formatInr } from "@/lib/api";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ComposedChart, Line,
 } from "recharts";
-import { Loader2 } from "lucide-react";
+import { Loader2, CircleDollarSign, TrendingUp, HandCoins, ShieldCheck } from "lucide-react";
 
 export default function FinancePage() {
   const [summary, setSummary] = useState(null);
@@ -28,17 +28,43 @@ export default function FinancePage() {
 
   const s = summary;
   return (
-    <AppLayout title="Finance & Savings" subtitle="Monthly P&L, running savings, and outstanding payables.">
+    <AppLayout title="Finance & Savings" subtitle="Monthly income vs payouts, take-home profit, and auto-savings reserve.">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-        <KpiCard label="Total income" value={formatInr(s.total_income)} sub={`${s.booking_count} bookings`} testid="finance-income" />
-        <KpiCard label="Total payouts" value={formatInr(s.total_owner_cost + s.total_agent_fee)}
-          sub={`Owner ${formatInr(s.total_owner_cost)} · Driver ${formatInr(s.total_agent_fee)}`}
-          tone="negative" testid="finance-payouts" />
-        <KpiCard label="Net profit" value={formatInr(s.total_net_profit)}
-          sub={`Gross margin ${formatInr(s.total_margin)}`}
-          tone="positive" testid="finance-net" />
-        <KpiCard label={`Savings @ ${s.savings_percent}%`} value={formatInr(s.savings_accrued)}
-          sub="Auto-accrued from net profit" tone="warn" testid="finance-savings" />
+        <KpiCard
+          icon={CircleDollarSign}
+          badge="Total Sales"
+          label="Customer Revenue"
+          value={formatInr(s.total_income)}
+          sub={`Total from ${s.booking_count} bookings`}
+          testid="finance-income"
+        />
+        <KpiCard
+          icon={HandCoins}
+          badge="Costs"
+          label="Total Payouts Owed"
+          value={formatInr(s.total_owner_cost + s.total_agent_fee)}
+          sub={`Car rent: ${formatInr(s.total_owner_cost)} · Driver fees: ${formatInr(s.total_agent_fee)}`}
+          tone="negative"
+          testid="finance-payouts"
+        />
+        <KpiCard
+          icon={TrendingUp}
+          badge="Your Earnings"
+          label="Net Take-Home Profit"
+          value={formatInr(s.total_net_profit)}
+          sub={`Gross margin before drivers: ${formatInr(s.total_margin)}`}
+          tone="positive"
+          testid="finance-net"
+        />
+        <KpiCard
+          icon={ShieldCheck}
+          badge={`${s.savings_percent}% Reserve`}
+          label="Auto Savings Fund"
+          value={formatInr(s.savings_accrued)}
+          sub="Auto-saved 10% from your net profit"
+          tone="warn"
+          testid="finance-savings"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">

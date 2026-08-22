@@ -15,6 +15,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Validate response format to reject HTML responses returned by SPA fallback rewrite
+api.interceptors.response.use(
+  (response) => {
+    if (
+      typeof response.data === "string" &&
+      (response.data.trim().startsWith("<!doctype html") || response.data.trim().startsWith("<html"))
+    ) {
+      const error = new Error("API endpoint returned HTML instead of JSON. Backend service might be unreachable or misconfigured.");
+      error.response = { status: 404, data: { detail: error.message } };
+      return Promise.reject(error);
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
 export function formatInr(n) {
   const num = Number(n || 0);
   return `₹${num.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;

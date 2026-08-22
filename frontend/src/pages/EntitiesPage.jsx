@@ -148,7 +148,7 @@ export default function EntitiesPage({ type }) {
         </div>
         <div className="text-xs font-medium text-[#C3E7F1] flex items-center gap-1.5 bg-[#16272A]/80 px-3 py-1.5 rounded-lg border border-[#2C494E] shrink-0">
           <HelpCircle className="w-4 h-4 text-[#FFC64F]" />
-          <span>{isOwner ? "Linked in: Cars & Ledger" : "Linked in: Bookings & Ledger"}</span>
+          <span>{isOwner ? "Linked in: Cars & Payouts" : "Linked in: Bookings & Payouts"}</span>
         </div>
       </div>
 
@@ -196,7 +196,7 @@ export default function EntitiesPage({ type }) {
                   {isOwner ? <User className="w-5 h-5 text-[#20373B]" /> : <Users className="w-5 h-5 text-[#20373B]" />}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-[#519CAB] font-semibold group-hover:translate-x-1 transition-transform">
-                  <span>View Ledger</span>
+                  <span>View Payouts</span>
                   <ArrowRight className="w-3.5 h-3.5 text-[#519CAB]" />
                 </div>
               </div>

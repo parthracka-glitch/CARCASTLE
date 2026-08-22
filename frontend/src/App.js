@@ -15,8 +15,8 @@ import CarsPage from "@/pages/CarsPage";
 import LedgerPage from "@/pages/LedgerPage";
 import FinancePage from "@/pages/FinancePage";
 import ReportsPage from "@/pages/ReportsPage";
-import RateHistoryPage from "@/pages/RateHistoryPage";
 import SettingsPage from "@/pages/SettingsPage";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 function Loading() {
   return (
@@ -29,7 +29,7 @@ function Loading() {
 function Protected({ children, superOnly }) {
   const { user, loading } = useAuth();
   if (loading) return <Loading />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user || typeof user !== "object") return <Navigate to="/login" replace />;
   if (superOnly && user.role !== "super_admin") return <Navigate to="/" replace />;
   return children;
 }
@@ -49,7 +49,6 @@ function AppRoutes() {
       <Route path="/ledger" element={<Protected superOnly><LedgerPage /></Protected>} />
       <Route path="/finance" element={<Protected superOnly><FinancePage /></Protected>} />
       <Route path="/reports" element={<Protected superOnly><ReportsPage /></Protected>} />
-      <Route path="/rate-history" element={<Protected superOnly><RateHistoryPage /></Protected>} />
       <Route path="/settings" element={<Protected superOnly><SettingsPage /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -58,14 +57,16 @@ function AppRoutes() {
 
 function App() {
   return (
-    <div className="App">
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-        <Toaster position="top-right" richColors closeButton />
-      </AuthProvider>
-    </div>
+    <ErrorBoundary>
+      <div className="App">
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+          <Toaster position="top-right" richColors closeButton />
+        </AuthProvider>
+      </div>
+    </ErrorBoundary>
   );
 }
 

@@ -9,7 +9,7 @@ import os
 import logging
 
 from deps import get_db
-from seed import seed, create_indexes
+from seed import seed, create_indexes, seed_demo_data
 from routers.auth_router import router as auth_router
 from routers.entities_router import router as entities_router
 from routers.bookings_router import router as bookings_router, transfers_router
@@ -32,6 +32,22 @@ api.include_router(finance_router)
 api.include_router(settings_router)
 api.include_router(activity_router)
 api.include_router(reports_router)
+
+demo_router = APIRouter(prefix="/demo", tags=["demo"])
+
+@demo_router.post("/seed")
+async def api_seed_demo():
+    db = get_db()
+    res = await seed_demo_data(db)
+    return {"message": "Demo data seeded successfully", "details": res}
+
+@demo_router.post("/reset")
+async def api_reset_demo():
+    db = get_db()
+    res = await seed_demo_data(db)
+    return {"message": "Demo data reset successfully", "details": res}
+
+api.include_router(demo_router)
 
 
 @api.get("/")
