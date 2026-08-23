@@ -58,8 +58,15 @@ api.include_router(demo_router)
 
 
 @api.get("/")
+@api.get("/health")
 async def root():
-    return {"service": "Car Castle Goa", "status": "ok"}
+    return {"service": "Car Castle Goa", "status": "ok", "healthy": True}
+
+
+@app.get("/health")
+@app.get("/")
+async def root_health():
+    return {"service": "Car Castle Goa", "status": "ok", "healthy": True}
 
 
 app.include_router(api)
