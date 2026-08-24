@@ -12,14 +12,17 @@ import pytest
 import requests
 from pathlib import Path
 
-# Read backend URL from frontend/.env
-_env = Path("/app/frontend/.env").read_text()
-for line in _env.splitlines():
-    if line.startswith("REACT_APP_BACKEND_URL="):
-        BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
-        break
-else:
-    raise RuntimeError("REACT_APP_BACKEND_URL not found")
+# Read backend URL from frontend/.env or fallback to localhost:8000
+FRONTEND_ENV = Path(__file__).resolve().parent.parent.parent / "frontend" / ".env"
+if not FRONTEND_ENV.exists():
+    FRONTEND_ENV = Path("/app/frontend/.env")
+
+BASE_URL = "http://localhost:8000"
+if FRONTEND_ENV.exists():
+    for line in FRONTEND_ENV.read_text().splitlines():
+        if line.startswith("REACT_APP_BACKEND_URL="):
+            BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
+            break
 
 API = f"{BASE_URL}/api"
 

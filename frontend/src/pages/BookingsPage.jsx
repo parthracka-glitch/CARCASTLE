@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import StatusPill from "@/components/StatusPill";
 import { api, formatInr, formatDate, formatApiError } from "@/lib/api";
+import { calculateRentalDays, isDropAfter9AM, formatTime12h } from "@/lib/dateUtils";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,26 +15,20 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw } from "lucide-react";
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
   car_id: "", start_date: "", end_date: "",
+  pickup_time: "09:00", drop_time: "09:00",
   pickup_location: "", drop_location: "",
   daily_cost_rate: "", daily_customer_rate: "",
   cost_rate: "", customer_rate: "",
+  payment_method: "cash",
+  deposit_amount: "3000", deposit_status: "received",
   transfer_type: "none", flight_time: "", transfer_pickup_point: "",
   assigned_agent_id: "", agent_fee: "0", notes: "",
 };
-
-function getDaysCount(start, end) {
-  if (!start || !end) return 1;
-  const s = new Date(start);
-  const e = new Date(end);
-  const diffTime = e.getTime() - s.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays > 0 ? diffDays : 1;
-}
 
 export default function BookingsPage() {
   const { user } = useAuth();
@@ -43,6 +38,7 @@ export default function BookingsPage() {
   const [agents, setAgents] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -63,6 +59,7 @@ export default function BookingsPage() {
 
   const filtered = rows.filter((b) => {
     if (statusFilter !== "all" && b.status !== statusFilter) return false;
+    if (paymentFilter !== "all" && (b.payment_method || "cash") !== paymentFilter) return false;
     if (!q) return true;
     const s = q.toLowerCase();
     return (b.customer_name || "").toLowerCase().includes(s) ||
@@ -70,34 +67,53 @@ export default function BookingsPage() {
       (b.customer_contact || "").toLowerCase().includes(s);
   });
 
-  const days = getDaysCount(form.start_date, form.end_date);
+  const days = calculateRentalDays(form.start_date, form.end_date, form.pickup_time, form.drop_time);
 
-  const onStartDateChange = (val) => {
-    const newDays = getDaysCount(val, form.end_date);
+  const recomputeRatesForDates = (sDate, eDate, pTime, dTime) => {
+    const newDays = calculateRentalDays(sDate, eDate, pTime, dTime);
     const newCost = form.daily_cost_rate ? String(Number(form.daily_cost_rate) * newDays) : form.cost_rate;
     const newCustomer = form.daily_customer_rate ? String(Number(form.daily_customer_rate) * newDays) : form.customer_rate;
-    setForm({ ...form, start_date: val, cost_rate: newCost, customer_rate: newCustomer });
+    return { days: newDays, cost_rate: newCost, customer_rate: newCustomer };
+  };
+
+  const onStartDateChange = (val) => {
+    const rec = recomputeRatesForDates(val, form.end_date, form.pickup_time, form.drop_time);
+    setForm({ ...form, start_date: val, cost_rate: rec.cost_rate, customer_rate: rec.customer_rate });
   };
 
   const onEndDateChange = (val) => {
-    const newDays = getDaysCount(form.start_date, val);
-    const newCost = form.daily_cost_rate ? String(Number(form.daily_cost_rate) * newDays) : form.cost_rate;
-    const newCustomer = form.daily_customer_rate ? String(Number(form.daily_customer_rate) * newDays) : form.customer_rate;
-    setForm({ ...form, end_date: val, cost_rate: newCost, customer_rate: newCustomer });
+    const rec = recomputeRatesForDates(form.start_date, val, form.pickup_time, form.drop_time);
+    setForm({ ...form, end_date: val, cost_rate: rec.cost_rate, customer_rate: rec.customer_rate });
+  };
+
+  const onPickupTimeChange = (val) => {
+    const rec = recomputeRatesForDates(form.start_date, form.end_date, val, form.drop_time);
+    setForm({ ...form, pickup_time: val, cost_rate: rec.cost_rate, customer_rate: rec.customer_rate });
+  };
+
+  const onDropTimeChange = (val) => {
+    const rec = recomputeRatesForDates(form.start_date, form.end_date, form.pickup_time, val);
+    setForm({ ...form, drop_time: val, cost_rate: rec.cost_rate, customer_rate: rec.customer_rate });
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      const calcDays = getDaysCount(form.start_date, form.end_date);
+      const calcDays = calculateRentalDays(form.start_date, form.end_date, form.pickup_time, form.drop_time);
       const dailyCost = Number(form.daily_cost_rate || (form.cost_rate ? Number(form.cost_rate) / calcDays : 0));
       const dailyCustomer = Number(form.daily_customer_rate || (form.customer_rate ? Number(form.customer_rate) / calcDays : 0));
       const totalCost = Number(form.cost_rate || (dailyCost * calcDays));
       const totalCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
+      const depositAmt = Number(form.deposit_amount || 0);
 
       const payload = {
         ...form,
         days: calcDays,
+        pickup_time: form.pickup_time || "09:00",
+        drop_time: form.drop_time || "09:00",
+        payment_method: form.payment_method || "cash",
+        deposit_amount: depositAmt,
+        deposit_status: depositAmt > 0 ? (form.deposit_status || "received") : "none",
         daily_cost_rate: dailyCost,
         daily_customer_rate: dailyCustomer,
         cost_rate: totalCost,
@@ -122,7 +138,7 @@ export default function BookingsPage() {
 
   const openEdit = (b) => {
     setEditing(b);
-    const bDays = b.days || getDaysCount(b.start_date, b.end_date);
+    const bDays = b.days || calculateRentalDays(b.start_date, b.end_date, b.pickup_time, b.drop_time);
     const dCost = b.daily_cost_rate || (bDays > 0 ? Number(b.cost_rate) / bDays : b.cost_rate);
     const dCust = b.daily_customer_rate || (bDays > 0 ? Number(b.customer_rate) / bDays : b.customer_rate);
 
@@ -134,6 +150,11 @@ export default function BookingsPage() {
       car_id: b.car_id || "",
       start_date: (b.start_date || "").slice(0, 10),
       end_date: (b.end_date || "").slice(0, 10),
+      pickup_time: b.pickup_time || "09:00",
+      drop_time: b.drop_time || "09:00",
+      payment_method: b.payment_method || "cash",
+      deposit_amount: String(b.deposit_amount ?? "0"),
+      deposit_status: b.deposit_status || "none",
       pickup_location: b.pickup_location || "",
       drop_location: b.drop_location || "",
       daily_cost_rate: dCost ? String(dCost) : "",
@@ -148,6 +169,17 @@ export default function BookingsPage() {
       notes: b.notes || "",
     });
     setOpen(true);
+  };
+
+  const refundDeposit = async (b) => {
+    if (!window.confirm(`Refund security deposit of ₹${Number(b.deposit_amount || 0).toLocaleString('en-IN')} to ${b.customer_name}?`)) return;
+    try {
+      await api.put(`/bookings/${b.id}/refund-deposit`, {});
+      toast.success(`Deposit of ${formatInr(b.deposit_amount)} refunded to ${b.customer_name}`);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to refund deposit");
+    }
   };
 
   const updateStatus = async (b, s) => {
@@ -216,22 +248,129 @@ export default function BookingsPage() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Start date">
-                <Input type="date" value={form.start_date} onChange={(e) => onStartDateChange(e.target.value)} data-testid="booking-start-date" />
-              </Field>
-              <Field label="End date">
-                <Input type="date" value={form.end_date} onChange={(e) => onEndDateChange(e.target.value)} data-testid="booking-end-date" />
-              </Field>
 
-              {/* Live Duration Pill */}
-              <div className="sm:col-span-2 bg-[#F4FAFC] border border-[#C3E7F1] px-3.5 py-2 rounded-xl flex items-center justify-between text-xs">
-                <span className="font-semibold text-[#20373B] flex items-center gap-1.5">
-                  <span>⏱️ Rental Duration:</span>
-                  <span className="bg-[#20373B] text-[#FFC64F] px-2 py-0.5 rounded-md font-bold text-xs">{days} Day{days > 1 ? "s" : ""}</span>
-                </span>
-                <span className="text-[#519CAB] font-medium text-[11px]">
-                  {form.start_date ? formatDate(form.start_date) : "—"} → {form.end_date ? formatDate(form.end_date) : "—"}
-                </span>
+              {/* Pickup Date + Time */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Pickup Date & Time</Label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  <Input
+                    type="date"
+                    value={form.start_date}
+                    onChange={(e) => onStartDateChange(e.target.value)}
+                    data-testid="booking-start-date"
+                    className="col-span-3"
+                  />
+                  <Input
+                    type="time"
+                    value={form.pickup_time || "09:00"}
+                    onChange={(e) => onPickupTimeChange(e.target.value)}
+                    data-testid="booking-pickup-time"
+                    className="col-span-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Drop Date + Time */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Drop-off Date & Time</Label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  <Input
+                    type="date"
+                    value={form.end_date}
+                    onChange={(e) => onEndDateChange(e.target.value)}
+                    data-testid="booking-end-date"
+                    className="col-span-3"
+                  />
+                  <Input
+                    type="time"
+                    value={form.drop_time || "09:00"}
+                    onChange={(e) => onDropTimeChange(e.target.value)}
+                    data-testid="booking-drop-time"
+                    className="col-span-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Live Duration Pill with 9AM Rule Badge */}
+              <div className="sm:col-span-2 bg-[#F4FAFC] border border-[#C3E7F1] p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[#20373B] flex items-center gap-1.5">
+                    <span>⏱️ Rental Duration:</span>
+                    <span className="bg-[#20373B] text-[#FFC64F] px-2.5 py-0.5 rounded-md font-bold text-xs">
+                      {days} Day{days > 1 ? "s" : ""}
+                    </span>
+                  </span>
+                  {isDropAfter9AM(form.drop_time) && (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+                      ⚡ Drop after 9:00 AM (+1 day charged)
+                    </span>
+                  )}
+                </div>
+                <div className="text-[#519CAB] font-semibold text-[11px] text-right">
+                  {form.start_date ? formatDate(form.start_date) : "—"} {formatTime12h(form.pickup_time)} → {form.end_date ? formatDate(form.end_date) : "—"} {formatTime12h(form.drop_time)}
+                </div>
+              </div>
+
+              {/* Payment Method Selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-[#20373B]">Payment Method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, payment_method: "cash" })}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${
+                      form.payment_method === "cash"
+                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Banknote className="w-4 h-4 text-emerald-600" />
+                    Cash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, payment_method: "online" })}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${
+                      form.payment_method === "online"
+                        ? "bg-blue-50 border-blue-500 text-blue-800 shadow-xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                    Online (UPI/Bank)
+                  </button>
+                </div>
+              </div>
+
+              {/* Security Deposit Amount with Quick Select Box */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-[#20373B]">Security Deposit (₹)</Label>
+                <div className="space-y-1.5">
+                  <Input
+                    type="number"
+                    value={form.deposit_amount}
+                    onChange={(e) => setForm({ ...form, deposit_amount: e.target.value })}
+                    placeholder="e.g. 3000"
+                    className="border-[#C3E7F1]"
+                    data-testid="booking-deposit-input"
+                  />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {["0", "2000", "3000", "5000"].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setForm({ ...form, deposit_amount: amt })}
+                        className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border ${
+                          form.deposit_amount === amt
+                            ? "bg-[#20373B] text-[#FFC64F] border-[#20373B]"
+                            : "bg-white border-[#C3E7F1] text-slate-700 hover:bg-[#F4FAFC]"
+                        }`}
+                      >
+                        {amt === "0" ? "₹0 (None)" : `₹${Number(amt).toLocaleString("en-IN")}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <Field label="Pickup location">
@@ -305,9 +444,9 @@ export default function BookingsPage() {
                   <SelectTrigger data-testid="booking-transfer-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No transfer</SelectItem>
-                    <SelectItem value="airport_pickup">Airport pickup</SelectItem>
-                    <SelectItem value="airport_drop">Airport drop</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
+                    <SelectItem value="airport_pickup">Airport pickup (₹1000)</SelectItem>
+                    <SelectItem value="airport_drop">Airport drop (₹1000)</SelectItem>
+                    <SelectItem value="both">Both (₹2000)</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
@@ -390,6 +529,14 @@ export default function BookingsPage() {
               placeholder="Search customer, phone, car plate…"
               className="pl-9 h-9 bg-white border-[#C3E7F1]" data-testid="bookings-search" />
           </div>
+          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+            <SelectTrigger className="w-full sm:w-40 h-9 bg-white border-[#C3E7F1]" data-testid="bookings-payment-filter"><SelectValue placeholder="All Payments" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Payments</SelectItem>
+              <SelectItem value="cash">💵 Cash Only</SelectItem>
+              <SelectItem value="online">💳 Online Only</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-44 h-9 bg-white border-[#C3E7F1]" data-testid="bookings-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -402,105 +549,151 @@ export default function BookingsPage() {
             </SelectContent>
           </Select>
         </div>
+
         {/* 📱 Mobile Cards View (<sm) */}
         <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
-          {filtered.map((b) => (
-            <div key={b.id} className="p-3.5 space-y-2.5 bg-white" data-testid={`booking-card-${b.id}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-bold text-[#20373B] text-base leading-snug">{b.customer_name}</div>
-                  <a
-                    href={`tel:${b.customer_contact}`}
-                    className="text-xs text-[#519CAB] font-semibold flex items-center gap-1 mt-0.5"
-                  >
-                    📞 {b.customer_contact}
-                  </a>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-2 py-0.5 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
-                    {b.car_registration}
-                  </span>
-                  <div className="text-[11px] text-slate-500 font-medium">{b.car_model}</div>
-                </div>
-              </div>
+          {filtered.map((b) => {
+            const bDays = b.days || calculateRentalDays(b.start_date, b.end_date, b.pickup_time, b.drop_time);
+            const isCash = (b.payment_method || "cash") === "cash";
+            const depAmt = Number(b.deposit_amount || 0);
 
-              {/* Dates & Status */}
-              <div className="flex items-center justify-between text-xs bg-[#F4FAFC] p-2.5 rounded-lg border border-[#C3E7F1]/60">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                    Rental Period · <span className="text-[#519CAB] font-bold">{b.days || getDaysCount(b.start_date, b.end_date)} Day{(b.days || getDaysCount(b.start_date, b.end_date)) > 1 ? "s" : ""}</span>
+            return (
+              <div key={b.id} className="p-3.5 space-y-2.5 bg-white" data-testid={`booking-card-${b.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-[#20373B] text-base leading-snug">{b.customer_name}</div>
+                    <a
+                      href={`tel:${b.customer_contact}`}
+                      className="text-xs text-[#519CAB] font-semibold flex items-center gap-1 mt-0.5"
+                    >
+                      📞 {b.customer_contact}
+                    </a>
                   </div>
-                  <div className="font-semibold text-slate-800 mt-0.5">
-                    {formatDate(b.start_date)} → {formatDate(b.end_date)}
+                  <div className="text-right">
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
+                      {b.car_registration}
+                    </span>
+                    <div className="text-[11px] text-slate-500 font-medium">{b.car_model}</div>
                   </div>
                 </div>
-                <div>
-                  <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
-                    <SelectTrigger className="h-7 w-32 text-xs bg-white border-[#C3E7F1]" data-testid={`booking-mobile-status-${b.id}`}>
-                      <SelectValue><StatusPill status={b.status} /></SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["reserved","car_received","with_customer","returned","cancelled"].map((s) => (
-                        <SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              {/* Financials Strip */}
-              {(() => {
-                const bDays = b.days || getDaysCount(b.start_date, b.end_date);
-                const dCust = b.daily_customer_rate || (bDays > 0 ? b.customer_rate / bDays : b.customer_rate);
-                const dCost = b.daily_cost_rate || (bDays > 0 ? b.cost_rate / bDays : b.cost_rate);
-                return (
-                  <div className="grid grid-cols-3 gap-2 text-center p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer Sales</div>
-                      <div className="font-bold font-tabular text-[#20373B] text-sm">{formatInr(b.customer_rate)}</div>
-                      {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCust)}/d</div>}
+                {/* Dates & Status */}
+                <div className="flex items-center justify-between text-xs bg-[#F4FAFC] p-2.5 rounded-lg border border-[#C3E7F1]/60">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                      <span>Rental:</span>
+                      <span className="text-[#519CAB] font-bold">{bDays} Day{bDays > 1 ? "s" : ""}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${isCash ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>
+                        {isCash ? "💵 Cash" : "💳 Online"}
+                      </span>
                     </div>
-                    {!isOp && (
-                      <div>
-                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Owner Rent</div>
-                        <div className="font-bold font-tabular text-red-700 text-sm">{formatInr(b.cost_rate)}</div>
-                        {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCost)}/d</div>}
-                      </div>
-                    )}
-                    {!isOp && (
-                      <div>
-                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Net Profit</div>
-                        <div className="font-extrabold font-tabular text-emerald-700 text-sm">{formatInr(b.margin)}</div>
-                        <div className="text-[10px] text-emerald-600 font-semibold">{bDays}d profit</div>
-                      </div>
-                    )}
+                    <div className="font-semibold text-slate-800 mt-0.5 text-[11px]">
+                      {formatDate(b.start_date)} {formatTime12h(b.pickup_time)} → {formatDate(b.end_date)} {formatTime12h(b.drop_time)}
+                    </div>
                   </div>
-                );
-              })()}
+                  <div>
+                    <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
+                      <SelectTrigger className="h-7 w-32 text-xs bg-white border-[#C3E7F1]" data-testid={`booking-mobile-status-${b.id}`}>
+                        <SelectValue><StatusPill status={b.status} /></SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["reserved","car_received","with_customer","returned","cancelled"].map((s) => (
+                          <SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openEdit(b)}
-                  className="h-8 text-xs font-semibold border-[#C3E7F1] text-[#20373B]"
-                >
-                  Edit Booking
-                </Button>
-                {!isOp && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => del(b)}
-                    className="h-8 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </Button>
+                {/* Deposit Badge Strip (if deposit exists) */}
+                {depAmt > 0 && (
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-amber-50/60 border border-amber-200 text-xs">
+                    <span className="flex items-center gap-1 font-medium text-amber-900">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                      Deposit: <strong>{formatInr(depAmt)}</strong>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        b.deposit_status === "refunded" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {b.deposit_status === "refunded" ? "Refunded" : "Received (Held)"}
+                      </span>
+                      {b.deposit_status === "received" && (
+                        <button
+                          type="button"
+                          onClick={() => refundDeposit(b)}
+                          className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline"
+                        >
+                          Refund
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
+
+                {/* Financials Strip */}
+                {(() => {
+                  const dCust = b.daily_customer_rate || (bDays > 0 ? b.customer_rate / bDays : b.customer_rate);
+                  const dCost = b.daily_cost_rate || (bDays > 0 ? b.cost_rate / bDays : b.cost_rate);
+                  return (
+                    <div className="grid grid-cols-3 gap-2 text-center p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer Sales</div>
+                        <div className="font-bold font-tabular text-[#20373B] text-sm">{formatInr(b.customer_rate)}</div>
+                        {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCust)}/d</div>}
+                      </div>
+                      {!isOp && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500">Owner Rent</div>
+                          <div className="font-bold font-tabular text-red-700 text-sm">{formatInr(b.cost_rate)}</div>
+                          {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCost)}/d</div>}
+                        </div>
+                      )}
+                      {!isOp && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500">Net Profit</div>
+                          <div className="font-extrabold font-tabular text-emerald-700 text-sm">{formatInr(b.margin)}</div>
+                          <div className="text-[10px] text-emerald-600 font-semibold">{bDays}d profit</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  {depAmt > 0 && b.deposit_status === "received" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refundDeposit(b)}
+                      className="h-8 text-xs font-semibold text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" /> Refund Deposit
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(b)}
+                    className="h-8 text-xs font-semibold border-[#C3E7F1] text-[#20373B]"
+                  >
+                    Edit Booking
+                  </Button>
+                  {!isOp && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => del(b)}
+                      className="h-8 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <div className="p-8 text-center text-slate-500 text-sm">No bookings match your filters.</div>
           )}
@@ -511,9 +704,11 @@ export default function BookingsPage() {
           <table className="w-full text-sm" data-testid="bookings-table">
             <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="text-left px-5 py-2.5 font-semibold">Dates & Duration</th>
+                <th className="text-left px-5 py-2.5 font-semibold">Dates & Times</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Customer</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Car</th>
+                <th className="text-left px-5 py-2.5 font-semibold">Payment</th>
+                <th className="text-left px-5 py-2.5 font-semibold">Deposit</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Status</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Transfer</th>
                 {!isOp && <th className="text-right px-5 py-2.5 font-semibold">Car Cost</th>}
@@ -524,16 +719,27 @@ export default function BookingsPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((b) => {
-                const bDays = b.days || getDaysCount(b.start_date, b.end_date);
+                const bDays = b.days || calculateRentalDays(b.start_date, b.end_date, b.pickup_time, b.drop_time);
                 const dCust = b.daily_customer_rate || (bDays > 0 ? b.customer_rate / bDays : b.customer_rate);
                 const dCost = b.daily_cost_rate || (bDays > 0 ? b.cost_rate / bDays : b.cost_rate);
+                const isCash = (b.payment_method || "cash") === "cash";
+                const depAmt = Number(b.deposit_amount || 0);
 
                 return (
                   <tr key={b.id} className="dense-row" data-testid={`booking-row-${b.id}`}>
                     <td className="px-5 py-2.5 whitespace-nowrap">
-                      <div className="font-medium text-[#20373B]">{formatDate(b.start_date)} → {formatDate(b.end_date)}</div>
+                      <div className="font-medium text-[#20373B] text-xs">
+                        {formatDate(b.start_date)} <span className="text-slate-500 font-normal">({formatTime12h(b.pickup_time)})</span>
+                        {" → "}
+                        {formatDate(b.end_date)} <span className="text-slate-500 font-normal">({formatTime12h(b.drop_time)})</span>
+                      </div>
                       <div className="text-xs font-bold text-[#519CAB] flex items-center gap-1 mt-0.5">
                         <span>⏱️ {bDays} Day{bDays > 1 ? "s" : ""}</span>
+                        {isDropAfter9AM(b.drop_time) && (
+                          <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                            9AM+ rule
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-2.5">
@@ -544,9 +750,31 @@ export default function BookingsPage() {
                       <div className="text-slate-700">{b.car_model}</div>
                       <div className="text-xs text-slate-500 font-mono">{b.car_registration}</div>
                     </td>
+                    <td className="px-5 py-2.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        isCash ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-blue-50 text-blue-800 border border-blue-200"
+                      }`}>
+                        {isCash ? <Banknote className="w-3 h-3 text-emerald-600" /> : <CreditCard className="w-3 h-3 text-blue-600" />}
+                        {isCash ? "Cash" : "Online"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-2.5 whitespace-nowrap">
+                      {depAmt > 0 ? (
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-xs font-tabular text-[#20373B]">{formatInr(depAmt)}</div>
+                          <span className={`inline-block text-[10px] font-bold uppercase px-1.5 py-0.2 rounded ${
+                            b.deposit_status === "refunded" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {b.deposit_status === "refunded" ? "Refunded" : "Received"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">₹0 (None)</span>
+                      )}
+                    </td>
                     <td className="px-5 py-2.5">
                       <Select value={b.status} onValueChange={(v) => updateStatus(b, v)}>
-                        <SelectTrigger className="w-36 h-8 text-xs" data-testid={`booking-status-${b.id}`}>
+                        <SelectTrigger className="w-32 h-8 text-xs" data-testid={`booking-status-${b.id}`}>
                           <SelectValue><StatusPill status={b.status} /></SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -576,7 +804,18 @@ export default function BookingsPage() {
                         <div className="text-emerald-700 font-extrabold text-[15px]">{formatInr(b.margin)}</div>
                       </td>
                     )}
-                    <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                    <td className="px-5 py-2.5 text-right whitespace-nowrap space-x-1">
+                      {depAmt > 0 && b.deposit_status === "received" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => refundDeposit(b)}
+                          className="text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8"
+                          title="Refund security deposit"
+                        >
+                          Refund Dep.
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => openEdit(b)} data-testid={`booking-edit-${b.id}`}>Edit</Button>
                       {!isOp && (
                         <Button variant="ghost" size="sm" onClick={() => del(b)} className="text-red-600 hover:text-red-700" data-testid={`booking-delete-${b.id}`}>Delete</Button>
@@ -586,7 +825,7 @@ export default function BookingsPage() {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={isOp ? 6 : 9} className="px-5 py-12 text-center text-slate-500">No bookings match your filters.</td></tr>
+                <tr><td colSpan={isOp ? 8 : 11} className="px-5 py-12 text-center text-slate-500">No bookings match your filters.</td></tr>
               )}
             </tbody>
           </table>

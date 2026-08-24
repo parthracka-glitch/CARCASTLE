@@ -142,6 +142,14 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
     total_net_profit = sum(float(b["net_profit"]) for b in bookings)
     savings_accrued = total_net_profit * (savings_pct / 100.0)
 
+    # Cash vs Online payment methods
+    total_cash_income = sum(float(b["customer_rate"]) for b in bookings if b.get("payment_method") != "online")
+    total_online_income = sum(float(b["customer_rate"]) for b in bookings if b.get("payment_method") == "online")
+
+    # Security Deposits
+    total_deposit_held = sum(float(b.get("deposit_amount", 0)) for b in bookings if b.get("deposit_status") == "received")
+    total_deposit_refunded = sum(float(b.get("deposit_amount", 0)) for b in bookings if b.get("deposit_status") == "refunded")
+
     # ledger snapshots
     owners = await db.car_owners.find({}, {"_id": 0}).to_list(500)
     agents = await db.agents.find({}, {"_id": 0}).to_list(500)
@@ -165,6 +173,10 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
 
     return {
         "total_income": total_income,
+        "total_cash_income": total_cash_income,
+        "total_online_income": total_online_income,
+        "total_deposit_held": total_deposit_held,
+        "total_deposit_refunded": total_deposit_refunded,
         "total_owner_cost": total_owner_cost,
         "total_agent_fee": total_agent_fee,
         "total_margin": total_margin,

@@ -5,23 +5,45 @@ const AuthCtx = createContext({ user: null, loading: true });
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    return typeof window !== "undefined" && Boolean(localStorage.getItem("ccg_token"));
+  });
 
   useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("ccg_token") : null;
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
     (async () => {
       try {
         const { data } = await api.get("/auth/me");
-        if (data && typeof data === "object" && typeof data.id === "string" && data.role) {
-          setUser(data);
-        } else {
-          setUser(null);
+        if (isMounted) {
+          if (data && typeof data === "object" && typeof data.id === "string" && data.role) {
+            setUser(data);
+          } else {
+            setUser(null);
+            localStorage.removeItem("ccg_token");
+          }
         }
       } catch (_e) {
-        setUser(null);
+        if (isMounted) {
+          setUser(null);
+          localStorage.removeItem("ccg_token");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (email, password) => {

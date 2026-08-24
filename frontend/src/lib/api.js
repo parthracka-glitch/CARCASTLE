@@ -6,6 +6,7 @@ export const API = BACKEND_URL ? (BACKEND_URL.endsWith("/") ? `${BACKEND_URL}api
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  timeout: 10000,
 });
 
 // Attach bearer token if we have one (fallback path when cookies blocked)

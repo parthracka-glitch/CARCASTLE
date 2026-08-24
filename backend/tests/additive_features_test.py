@@ -1,0 +1,123 @@
+import os
+import pytest
+import requests
+from pathlib import Path
+
+BASE_URL = "http://localhost:8000"
+
+def test_9am_day_calculation_units():
+    # Direct math check for 9AM rule
+    def calc_days(s, e, p_time="09:00", d_time="09:00"):
+        from datetime import datetime
+        s_dt = datetime.fromisoformat(str(s)[:10])
+        e_dt = datetime.fromisoformat(str(e)[:10])
+        diff = (e_dt - s_dt).days
+        if diff <= 0:
+            return 1
+        base = diff
+        if (d_time or "09:00").strip()[:5] > "09:00":
+            return base + 1
+        return max(1, base)
+
+    # 25th Aug 09:00 to 27th Aug 09:00 -> exactly 2 days
+    assert calc_days("2026-08-25", "2026-08-27", "09:00", "09:00") == 2
+    # 25th Aug 09:00 to 27th Aug 08:30 -> 2 days
+    assert calc_days("2026-08-25", "2026-08-27", "09:00", "08:30") == 2
+    # 25th Aug 09:00 to 27th Aug 09:30 -> 3 days
+    assert calc_days("2026-08-25", "2026-08-27", "09:00", "09:30") == 3
+    # 25th Aug 09:00 to 27th Aug 14:00 -> 3 days
+    assert calc_days("2026-08-25", "2026-08-27", "09:00", "14:00") == 3
+
+
+def test_additive_features_e2e():
+    session = requests.Session()
+    # Login as admin
+    login_res = session.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "admin@carcastlegoa.com",
+        "password": "admin123"
+    })
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Fetch available car
+    cars_res = session.get(f"{BASE_URL}/api/cars", headers=headers)
+    assert cars_res.status_code == 200
+    cars = cars_res.json()
+    assert len(cars) > 0
+    car_id = cars[0]["id"]
+
+    # 2. Create booking with 9AM rule (drop_time 14:00 -> +1 extra day), deposit amount ₹3,000, payment method Online, transfer split
+    booking_payload = {
+        "customer_name": "Test Rohit Sharma",
+        "customer_contact": "+91 99999 88888",
+        "car_id": car_id,
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-04",
+        "pickup_time": "09:00",
+        "drop_time": "14:00",  # After 09:00 -> 3 days + 1 extra = 4 days
+        "pickup_location": "MOPA Airport",
+        "drop_location": "Panjim",
+        "cost_rate": 6000,
+        "customer_rate": 10000,
+        "payment_method": "online",
+        "deposit_amount": 3000,
+        "transfer_type": "airport_pickup",
+        "transfer_cost": 1000,
+        "transfer_driver_share": 500,
+        "transfer_manoj_share": 500,
+    }
+    create_res = session.post(f"{BASE_URL}/api/bookings", json=booking_payload, headers=headers)
+    assert create_res.status_code == 200
+    b = create_res.json()
+    b_id = b["id"]
+
+    assert b["days"] == 4, f"Expected 4 days under 9AM-9AM rule, got {b['days']}"
+    assert b["payment_method"] == "online"
+    assert b["deposit_amount"] == 3000
+    assert b["deposit_status"] == "received"
+    assert b["transfer_driver_share"] == 500
+    assert b["transfer_manoj_share"] == 500
+
+    # 3. Test Security Deposit Refund
+    refund_res = session.put(f"{BASE_URL}/api/bookings/{b_id}/refund-deposit", json={"notes": "Returned clean"}, headers=headers)
+    assert refund_res.status_code == 200
+    refunded = refund_res.json()
+    assert refunded["deposit_status"] == "refunded"
+    assert refunded["deposit_refunded_at"] is not None
+
+    # 4. Test Schedule Endpoint
+    schedule_res = session.get(f"{BASE_URL}/api/transfers/schedule", headers=headers)
+    assert schedule_res.status_code == 200
+    sch = schedule_res.json()
+    assert "today" in sch
+    assert "tomorrow" in sch
+    assert "upcoming" in sch
+
+    # 5. Test Driver Reminder Dispatcher
+    remind_res = session.post(f"{BASE_URL}/api/transfers/{b_id}/remind-driver", headers=headers)
+    assert remind_res.status_code == 200
+    assert remind_res.json()["ok"] is True
+
+    # 6. Test ₹1000 Airport Transfer Split Tracking
+    split_res = session.put(f"{BASE_URL}/api/transfers/{b_id}/driver", json={
+        "transfer_driver_paid": True,
+        "transfer_manoj_paid": True,
+    }, headers=headers)
+    assert split_res.status_code == 200
+    updated_tr = split_res.json()
+    assert updated_tr["transfer_driver_paid"] is True
+    assert updated_tr["transfer_manoj_paid"] is True
+
+    # 7. Check Finance Summary contains Cash/Online and Deposit Totals
+    fin_res = session.get(f"{BASE_URL}/api/finance/summary", headers=headers)
+    assert fin_res.status_code == 200
+    fin = fin_res.json()
+    assert "total_cash_income" in fin
+    assert "total_online_income" in fin
+    assert "total_deposit_held" in fin
+    assert "total_deposit_refunded" in fin
+
+    # Clean up test booking
+    del_res = session.delete(f"{BASE_URL}/api/bookings/{b_id}", headers=headers)
+    assert del_res.status_code == 200

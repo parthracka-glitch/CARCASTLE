@@ -62,6 +62,11 @@ export default function TransfersPage() {
     driver_name: "Owner (Self)",
     driver_fee: "0",
     driver_fee_paid: "0",
+    transfer_cost: "1000",
+    transfer_driver_share: "500",
+    transfer_driver_paid: false,
+    transfer_manoj_share: "500",
+    transfer_manoj_paid: false,
     transfer_status: "scheduled",
     transfer_type: "airport_drop",
     flight_time: "",
@@ -111,6 +116,11 @@ export default function TransfersPage() {
         driver_name: newForm.driver_name || "Owner (Self)",
         driver_fee: Number(newForm.driver_fee || 0),
         driver_fee_paid: Number(newForm.driver_fee_paid || 0),
+        transfer_cost: 1000,
+        transfer_driver_share: 500,
+        transfer_driver_paid: false,
+        transfer_manoj_share: 500,
+        transfer_manoj_paid: false,
         customer_rate: Number(newForm.customer_rate || 0),
         cost_rate: Number(newForm.cost_rate || 0),
         notes: newForm.notes,
@@ -134,6 +144,11 @@ export default function TransfersPage() {
       driver_name: b.driver_name || "Owner (Self)",
       driver_fee: String(b.driver_fee || 0),
       driver_fee_paid: String(b.driver_fee_paid || 0),
+      transfer_cost: String(b.transfer_cost || 1000),
+      transfer_driver_share: String(b.transfer_driver_share || 500),
+      transfer_driver_paid: Boolean(b.transfer_driver_paid),
+      transfer_manoj_share: String(b.transfer_manoj_share || 500),
+      transfer_manoj_paid: Boolean(b.transfer_manoj_paid),
       transfer_status: b.transfer_status || "scheduled",
       transfer_type: b.transfer_type || "airport_drop",
       flight_time: b.flight_time || "",
@@ -141,6 +156,17 @@ export default function TransfersPage() {
       notes: b.notes || "",
     });
     setEditOpen(true);
+  };
+
+  const toggleSplitPayment = async (b, field, currentVal) => {
+    try {
+      const updates = { [field]: !currentVal };
+      await api.put(`/transfers/${b.id}/driver`, updates);
+      toast.success(`Updated ${field === "transfer_driver_paid" ? "Cab Driver" : "Manoj"} payment status`);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to update split payment");
+    }
   };
 
   const saveDriverUpdate = async () => {
@@ -151,6 +177,11 @@ export default function TransfersPage() {
         driver_name: form.driver_name,
         driver_fee: Number(form.driver_fee),
         driver_fee_paid: Number(form.driver_fee_paid),
+        transfer_cost: Number(form.transfer_cost || 1000),
+        transfer_driver_share: Number(form.transfer_driver_share || 500),
+        transfer_driver_paid: Boolean(form.transfer_driver_paid),
+        transfer_manoj_share: Number(form.transfer_manoj_share || 500),
+        transfer_manoj_paid: Boolean(form.transfer_manoj_paid),
         transfer_status: form.transfer_status,
         transfer_type: form.transfer_type,
         flight_time: form.flight_time,
@@ -187,10 +218,13 @@ export default function TransfersPage() {
   const totalDriverPaid = rows.reduce((acc, r) => acc + Number(r.driver_fee_paid || 0), 0);
   const totalDriverPending = totalDriverFees - totalDriverPaid;
 
+  const totalSplitDriverPaid = rows.reduce((acc, r) => acc + (r.transfer_driver_paid ? Number(r.transfer_driver_share || 500) : 0), 0);
+  const totalSplitManojPaid = rows.reduce((acc, r) => acc + (r.transfer_manoj_paid ? Number(r.transfer_manoj_share || 500) : 0), 0);
+
   return (
     <AppLayout
-      title="Airport Transfers & Driver Payouts"
-      subtitle="Track car drops/pickups, driver fees, payment settlements & monthly driver summaries."
+      title="Airport Transfers & Cost Breakdown"
+      subtitle="Customer ₹1,000 transfer split (₹500 Cab Driver · ₹500 Manoj), driver fee tracking & schedules."
       actions={
         <Button
           onClick={() => setNewOpen(true)}
@@ -209,19 +243,19 @@ export default function TransfersPage() {
           </div>
           <div>
             <h3 className="font-display font-bold text-white flex items-center gap-2 text-base">
-              Driver & Transfer Management
+              Airport Transfer Split (₹1,000 Standard Charge)
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#519CAB]/30 text-[#FFC64F] font-medium border border-[#519CAB]/40">
-                Owner vs. External Drivers
+                ₹500 Cab Driver · ₹500 Manoj
               </span>
             </h3>
             <p className="text-xs text-[#C3E7F1] mt-1 max-w-3xl leading-relaxed">
-              Log who drops or picks up each car (e.g. <strong>Owner (Self)</strong> or a hired driver like <strong>Suresh</strong>). Set the agreed drop amount, track payments made, and monitor monthly driver payout statements.
+              Every airport pickup/drop charged to the customer at ₹1,000 splits into <strong>₹500 to the cab driver</strong> and <strong>₹500 to Manoj</strong>. You can record payment status, mark who was paid, and track settled balances per trip.
             </p>
           </div>
         </div>
         <div className="text-xs font-medium text-[#C3E7F1] flex items-center gap-1.5 bg-[#16272A]/80 px-3 py-1.5 rounded-lg border border-[#2C494E] shrink-0">
           <HelpCircle className="w-4 h-4 text-[#FFC64F]" />
-          <span>Fully Editable Driver Fees</span>
+          <span>Automatic 50/50 Split</span>
         </div>
       </div>
 
@@ -229,7 +263,7 @@ export default function TransfersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <TabsList className="bg-[#C3E7F1]/30 border border-[#C3E7F1]">
             <TabsTrigger value="kanban" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
-              <Plane className="w-4 h-4 mr-1.5 text-[#519CAB]" /> Transfer Pipeline
+              <Plane className="w-4 h-4 mr-1.5 text-[#519CAB]" /> Transfer Pipeline & Splits
             </TabsTrigger>
             <TabsTrigger value="drivers" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
               <Users className="w-4 h-4 mr-1.5 text-[#519CAB]" /> Driver Payout Summary
@@ -237,22 +271,15 @@ export default function TransfersPage() {
           </TabsList>
 
           {/* Quick Metrics */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4 bg-white border border-slate-200 rounded-lg p-2.5 sm:px-4 sm:py-2 text-xs shadow-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 bg-white border border-[#C3E7F1] rounded-lg p-2.5 sm:px-4 sm:py-2 text-xs shadow-xs">
             <div>
-              <span className="text-slate-400 font-medium">Decided Fees:</span>{" "}
-              <span className="font-semibold font-tabular text-slate-900">{formatInr(totalDriverFees)}</span>
+              <span className="text-slate-400 font-medium">Driver Split Paid:</span>{" "}
+              <span className="font-semibold font-tabular text-emerald-600">{formatInr(totalSplitDriverPaid)}</span>
             </div>
             <div className="h-3 w-px bg-slate-200 hidden sm:block" />
             <div>
-              <span className="text-slate-400 font-medium">Driver Paid:</span>{" "}
-              <span className="font-semibold font-tabular text-emerald-600">{formatInr(totalDriverPaid)}</span>
-            </div>
-            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-            <div>
-              <span className="text-slate-400 font-medium">Driver Pending:</span>{" "}
-              <span className={`font-semibold font-tabular ${totalDriverPending > 0 ? "text-red-600" : "text-slate-500"}`}>
-                {formatInr(totalDriverPending)}
-              </span>
+              <span className="text-slate-400 font-medium">Manoj Split Paid:</span>{" "}
+              <span className="font-semibold font-tabular text-blue-600">{formatInr(totalSplitManojPaid)}</span>
             </div>
           </div>
         </div>
@@ -306,6 +333,54 @@ export default function TransfersPage() {
                           <Car className="w-3.5 h-3.5 text-slate-400" />
                           <span>{b.car_model}</span>
                           <span className="font-mono text-[11px] bg-[#C3E7F1]/30 px-1.5 py-0.5 rounded text-[#20373B]">{b.car_registration}</span>
+                        </div>
+
+                        {/* ₹1000 Standard Airport Transfer Split Strip */}
+                        <div className="mt-3 p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1] space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-[#20373B]">
+                            <span>Airport Transfer Split:</span>
+                            <span className="font-tabular text-[#519CAB]">Total: {formatInr(b.transfer_cost || 1000)}</span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            {/* Driver Share */}
+                            <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
+                                <span>🚕 Driver</span>
+                                <span className="font-tabular font-bold text-[#20373B]">{formatInr(b.transfer_driver_share || 500)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleSplitPayment(b, "transfer_driver_paid", b.transfer_driver_paid)}
+                                className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                  b.transfer_driver_paid
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                                }`}
+                              >
+                                {b.transfer_driver_paid ? "✅ Driver Paid" : "⏳ Driver Pending"}
+                              </button>
+                            </div>
+
+                            {/* Manoj Share */}
+                            <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
+                                <span>💼 Manoj</span>
+                                <span className="font-tabular font-bold text-[#20373B]">{formatInr(b.transfer_manoj_share || 500)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleSplitPayment(b, "transfer_manoj_paid", b.transfer_manoj_paid)}
+                                className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                  b.transfer_manoj_paid
+                                    ? "bg-blue-50 text-blue-800 border-blue-300"
+                                    : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                                }`}
+                              >
+                                {b.transfer_manoj_paid ? "✅ Manoj Paid" : "⏳ Manoj Pending"}
+                              </button>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Driver & Financials Box */}
@@ -384,8 +459,8 @@ export default function TransfersPage() {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div>
-                <h3 className="font-display font-semibold text-slate-900 text-sm">Monthly Driver Payout Ledger</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Aggregated fees, payments, and pending balances grouped by driver/person.</p>
+                <h3 className="font-display font-semibold text-slate-900 text-sm">Monthly Driver Payout Ledger & Cost Splits</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Aggregated fees, ₹500 split tracking, and pending balances grouped by driver/person.</p>
               </div>
               <div className="text-xs text-slate-500 font-semibold font-tabular">
                 {summaryData.drivers.length} Driver(s) Registered
@@ -515,9 +590,9 @@ export default function TransfersPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="airport_drop">Airport Drop</SelectItem>
-                    <SelectItem value="airport_pickup">Airport Pickup</SelectItem>
-                    <SelectItem value="both">Both Pickup & Drop</SelectItem>
+                    <SelectItem value="airport_drop">Airport Drop (₹1,000)</SelectItem>
+                    <SelectItem value="airport_pickup">Airport Pickup (₹1,000)</SelectItem>
+                    <SelectItem value="both">Both Pickup & Drop (₹2,000)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -551,6 +626,24 @@ export default function TransfersPage() {
               </div>
             </div>
 
+            {/* ₹1000 Split Preview Banner */}
+            <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-1.5">
+              <div className="font-bold text-blue-900 flex items-center justify-between">
+                <span>Airport Transfer Standard Split (₹1,000)</span>
+                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">50 / 50</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-slate-700 pt-0.5">
+                <div className="bg-white p-2 rounded border border-blue-100">
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase">Cab Driver Share</div>
+                  <div className="font-bold text-slate-800 text-sm mt-0.5">₹500</div>
+                </div>
+                <div className="bg-white p-2 rounded border border-blue-100">
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase">Manoj Share</div>
+                  <div className="font-bold text-slate-800 text-sm mt-0.5">₹500</div>
+                </div>
+              </div>
+            </div>
+
             {/* Driver Name & Financials */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
               <div className="space-y-1.5">
@@ -560,27 +653,6 @@ export default function TransfersPage() {
                   onChange={(e) => setNewForm({ ...newForm, driver_name: e.target.value })}
                   placeholder="e.g. Owner (Self) or Driver Suresh"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Decided Driver Fee (₹)</Label>
-                  <Input
-                    type="number"
-                    value={newForm.driver_fee}
-                    onChange={(e) => setNewForm({ ...newForm, driver_fee: e.target.value })}
-                    placeholder="500"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Amount Paid to Driver (₹)</Label>
-                  <Input
-                    type="number"
-                    value={newForm.driver_fee_paid}
-                    onChange={(e) => setNewForm({ ...newForm, driver_fee_paid: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
               </div>
             </div>
 
@@ -613,7 +685,7 @@ export default function TransfersPage() {
               <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
                 <User className="w-4 h-4" />
               </div>
-              Edit Driver & Transfer Details
+              Edit Driver & Transfer Split
             </DialogTitle>
           </DialogHeader>
 
@@ -636,34 +708,50 @@ export default function TransfersPage() {
               <p className="text-[11px] text-slate-400">Type "Owner (Self)" if the car owner dropped it, or enter the driver's name.</p>
             </div>
 
-            {/* Financials: Decided Fee vs Paid Amount */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Decided Fee (₹)</Label>
-                <Input
-                  type="number"
-                  value={form.driver_fee}
-                  onChange={(e) => setForm({ ...form, driver_fee: e.target.value })}
-                  placeholder="0"
-                />
+            {/* ₹1000 Cost Split Tracking */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-[#20373B]">₹1,000 Transfer Split Tracking</Label>
+                <span className="text-[11px] text-[#519CAB] font-semibold">Total: ₹{form.transfer_cost || 1000}</span>
               </div>
-              <div className="space-y-1.5">
-                <Label>Amount Paid (₹)</Label>
-                <Input
-                  type="number"
-                  value={form.driver_fee_paid}
-                  onChange={(e) => setForm({ ...form, driver_fee_paid: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-            </div>
 
-            {/* Calculated Pending */}
-            <div className="p-2.5 bg-[#FFC64F]/20 border border-[#FFC64F]/50 rounded-lg flex items-center justify-between text-xs">
-              <span className="font-bold text-[#20373B]">Calculated Pending Amount:</span>
-              <span className="font-bold font-tabular text-sm text-red-600">
-                {formatInr(Math.max(0, Number(form.driver_fee || 0) - Number(form.driver_fee_paid || 0)))}
-              </span>
+              {/* Cab Driver Split */}
+              <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                <div>
+                  <div className="text-xs font-semibold text-slate-800">🚕 Cab Driver Share</div>
+                  <div className="text-[11px] text-slate-500 font-tabular font-medium">₹{form.transfer_driver_share || 500}</div>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.transfer_driver_paid}
+                    onChange={(e) => setForm({ ...form, transfer_driver_paid: e.target.checked })}
+                    className="w-4 h-4 rounded text-emerald-600"
+                  />
+                  <span className={form.transfer_driver_paid ? "text-emerald-700" : "text-slate-500"}>
+                    {form.transfer_driver_paid ? "Paid" : "Mark Paid"}
+                  </span>
+                </label>
+              </div>
+
+              {/* Manoj Split */}
+              <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                <div>
+                  <div className="text-xs font-semibold text-slate-800">💼 Manoj Share</div>
+                  <div className="text-[11px] text-slate-500 font-tabular font-medium">₹{form.transfer_manoj_share || 500}</div>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.transfer_manoj_paid}
+                    onChange={(e) => setForm({ ...form, transfer_manoj_paid: e.target.checked })}
+                    className="w-4 h-4 rounded text-blue-600"
+                  />
+                  <span className={form.transfer_manoj_paid ? "text-blue-700" : "text-slate-500"}>
+                    {form.transfer_manoj_paid ? "Paid" : "Mark Paid"}
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Status & Flight info */}
@@ -707,7 +795,7 @@ export default function TransfersPage() {
               <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="e.g. Driver paid ₹300 cash on spot, ₹200 UPI pending..."
+                placeholder="e.g. ₹500 driver share paid via cash..."
                 rows={2}
               />
             </div>
@@ -716,7 +804,7 @@ export default function TransfersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={saveDriverUpdate} disabled={saving} className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold">
-              {saving ? "Saving…" : "Save Driver Details"}
+              {saving ? "Saving…" : "Save Details"}
             </Button>
           </DialogFooter>
         </DialogContent>

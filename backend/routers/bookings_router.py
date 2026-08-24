@@ -1,8 +1,8 @@
 """Bookings + Transfers router."""
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
-from datetime import datetime, timezone
-from models import BookingCreate, BookingUpdate, new_id, now_iso
+from datetime import datetime, timezone, timedelta
+from models import BookingCreate, BookingUpdate, new_id, now_iso, calculate_9am_days
 from deps import get_db, get_current_user, require_super_admin, log_activity
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -126,15 +126,13 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
         if not agent:
             raise HTTPException(400, "Assigned agent not found")
 
-    # Compute duration in days
-    calc_days = 1
-    try:
-        s_dt = datetime.fromisoformat(str(payload.start_date)[:10])
-        e_dt = datetime.fromisoformat(str(payload.end_date)[:10])
-        diff = (e_dt - s_dt).days
-        calc_days = diff if diff > 0 else 1
-    except Exception:
-        calc_days = payload.days or 1
+    # Compute duration using 9AM-9AM rule
+    calc_days = calculate_9am_days(
+        payload.start_date,
+        payload.end_date,
+        payload.pickup_time or "09:00",
+        payload.drop_time or "09:00",
+    )
 
     days = payload.days if (payload.days and payload.days > 0) else calc_days
 
@@ -159,12 +157,28 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     margin = customer_rate - cost_rate
     net_profit = margin - agent_fee
 
+    deposit_amt = float(payload.deposit_amount or 0.0)
+    deposit_status = payload.deposit_status or ("received" if deposit_amt > 0 else "none")
+
     booking_dict = payload.model_dump()
     booking_dict["days"] = days
     booking_dict["daily_cost_rate"] = daily_cost
     booking_dict["daily_customer_rate"] = daily_customer
     booking_dict["cost_rate"] = cost_rate
     booking_dict["customer_rate"] = customer_rate
+    booking_dict["deposit_amount"] = deposit_amt
+    booking_dict["deposit_status"] = deposit_status
+    booking_dict["pickup_time"] = payload.pickup_time or "09:00"
+    booking_dict["drop_time"] = payload.drop_time or "09:00"
+    booking_dict["payment_method"] = payload.payment_method or "cash"
+
+    # Transfer breakdown
+    if payload.transfer_type != "none":
+        booking_dict["transfer_cost"] = float(payload.transfer_cost or 1000.0)
+        booking_dict["transfer_driver_share"] = float(payload.transfer_driver_share or 500.0)
+        booking_dict["transfer_manoj_share"] = float(payload.transfer_manoj_share or 500.0)
+        booking_dict["transfer_driver_paid"] = bool(payload.transfer_driver_paid)
+        booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
 
     booking = {
         "id": new_id(),
@@ -182,12 +196,37 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     await db.bookings.insert_one(booking)
     await _add_ledger_entries_for_booking(db, booking, user)
     await log_activity(db, user, "create", "bookings", booking["id"],
-                       {"customer": payload.customer_name, "days": days, "margin": margin})
+                       {"customer": payload.customer_name, "days": days, "margin": margin, "deposit": deposit_amt})
 
     booking.pop("_id", None)
     if user["role"] == "operator":
         booking = _sanitize_for_operator(booking)
     return booking
+
+
+@router.put("/{booking_id}/refund-deposit")
+async def refund_deposit(booking_id: str, payload: dict = None, user: dict = Depends(get_current_user)):
+    db = get_db()
+    old = await db.bookings.find_one({"id": booking_id})
+    if not old:
+        raise HTTPException(404, "Booking not found")
+
+    deposit_amount = float(old.get("deposit_amount", 0))
+    updates = {
+        "deposit_status": "refunded",
+        "deposit_refunded_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    if payload and payload.get("notes"):
+        updates["deposit_refund_notes"] = payload["notes"]
+
+    await db.bookings.update_one({"id": booking_id}, {"$set": updates})
+    await log_activity(db, user, "refund_deposit", "bookings", booking_id,
+                       {"deposit_amount": deposit_amount})
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if user["role"] == "operator":
+        b = _sanitize_for_operator(b)
+    return b
 
 
 @router.get("/{booking_id}")
@@ -289,14 +328,92 @@ async def list_transfers(user: dict = Depends(get_current_user)):
         b["car_model"] = car.get("model", "—")
         b["car_registration"] = car.get("registration_no", "—")
         b["owner_name"] = owner_map.get(b.get("owner_id", ""), {}).get("name", "—")
-        # Ensure default values for driver fields
+        # Ensure default values for driver and split fields
         b["driver_name"] = b.get("driver_name") or "Owner (Self)"
         b["driver_fee"] = float(b.get("driver_fee") or 0.0)
         b["driver_fee_paid"] = float(b.get("driver_fee_paid") or 0.0)
         b["driver_fee_pending"] = max(0.0, b["driver_fee"] - b["driver_fee_paid"])
+        # ₹1000 transfer split fields
+        b["transfer_cost"] = float(b.get("transfer_cost") or 1000.0)
+        b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 500.0)
+        b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
+        b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or 500.0)
+        b["transfer_manoj_paid"] = bool(b.get("transfer_manoj_paid", False))
     if user["role"] == "operator":
         bookings = [_sanitize_for_operator(b) for b in bookings]
     return bookings
+
+
+@transfers_router.get("/schedule")
+async def get_transfer_schedule(user: dict = Depends(get_current_user)):
+    """Return today's, tomorrow's, and upcoming pickups/drops for drivers/operators."""
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    tomorrow_str = (now.date() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    all_bookings = await db.bookings.find({}, {"_id": 0}).sort("start_date", 1).to_list(2000)
+    car_map = {c["id"]: c for c in await db.cars.find({}, {"_id": 0}).to_list(1000)}
+
+    today_list = []
+    tomorrow_list = []
+    upcoming_list = []
+
+    for b in all_bookings:
+        car = car_map.get(b["car_id"], {})
+        b["car_model"] = car.get("model", "—")
+        b["car_registration"] = car.get("registration_no", "—")
+        b_start = (b.get("start_date") or "")[:10]
+        b_end = (b.get("end_date") or "")[:10]
+        b["driver_name"] = b.get("driver_name") or "Owner (Self)"
+        b["transfer_cost"] = float(b.get("transfer_cost") or 1000.0)
+        b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 500.0)
+        b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
+        b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or 500.0)
+        b["transfer_manoj_paid"] = bool(b.get("transfer_manoj_paid", False))
+
+        if b_start == today_str or b_end == today_str:
+            today_list.append(b)
+        elif b_start == tomorrow_str or b_end == tomorrow_str:
+            tomorrow_list.append(b)
+        elif b_start > tomorrow_str:
+            upcoming_list.append(b)
+
+    return {
+        "today_date": today_str,
+        "tomorrow_date": tomorrow_str,
+        "today": today_list,
+        "tomorrow": tomorrow_list,
+        "upcoming": upcoming_list[:20],
+    }
+
+
+@transfers_router.post("/{booking_id}/remind-driver")
+async def remind_transfer_driver(booking_id: str, user: dict = Depends(get_current_user)):
+    """Send / record an automated reminder alert for the assigned driver."""
+    db = get_db()
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+
+    driver_name = b.get("driver_name") or "Owner (Self)"
+    t_type = (b.get("transfer_type") or "airport_transfer").replace("_", " ").title()
+    f_time = b.get("flight_time") or b.get("start_date") or "Scheduled Time"
+    point = b.get("transfer_pickup_point") or b.get("pickup_location") or "Airport"
+    
+    msg = f"Upcoming Schedule Alert: {t_type} for {b.get('customer_name')} ({b.get('customer_contact')}). Flight/Time: {f_time}. Point: {point}. Car: {b.get('car_id')}."
+    
+    from reminders import send_reminder
+    record = await send_reminder(
+        db,
+        "transfer",
+        {"name": driver_name, "contact": b.get("customer_contact")},
+        msg,
+        booking_id=booking_id,
+    )
+    await log_activity(db, user, "remind_driver", "transfers", booking_id,
+                       {"driver": driver_name, "message": msg})
+    return {"ok": True, "message": f"Reminder alert sent to {driver_name}", "reminder": record}
 
 
 @transfers_router.get("/drivers-summary")
@@ -308,12 +425,25 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
     drivers_map = {}
     total_agreed = 0.0
     total_paid = 0.0
+    total_split_driver_paid = 0.0
+    total_split_manoj_paid = 0.0
 
     for b in bookings:
         driver = b.get("driver_name") or "Owner (Self)"
         fee = float(b.get("driver_fee") or 0.0)
         paid = float(b.get("driver_fee_paid") or 0.0)
         pending = max(0.0, fee - paid)
+
+        # ₹1000 split tracking
+        d_share = float(b.get("transfer_driver_share") or 500.0)
+        m_share = float(b.get("transfer_manoj_share") or 500.0)
+        d_paid = bool(b.get("transfer_driver_paid", False))
+        m_paid = bool(b.get("transfer_manoj_paid", False))
+
+        if d_paid:
+            total_split_driver_paid += d_share
+        if m_paid:
+            total_split_manoj_paid += m_share
 
         total_agreed += fee
         total_paid += paid
@@ -341,6 +471,10 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
             "fee": fee,
             "paid": paid,
             "pending": pending,
+            "transfer_driver_share": d_share,
+            "transfer_driver_paid": d_paid,
+            "transfer_manoj_share": m_share,
+            "transfer_manoj_paid": m_paid,
         })
 
     return {
@@ -349,6 +483,8 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
             "total_agreed_fee": total_agreed,
             "total_paid": total_paid,
             "total_pending": max(0.0, total_agreed - total_paid),
+            "total_split_driver_paid": total_split_driver_paid,
+            "total_split_manoj_paid": total_split_manoj_paid,
         },
         "drivers": list(drivers_map.values()),
     }
@@ -388,6 +524,13 @@ async def update_transfer_driver(booking_id: str, payload: dict, user: dict = De
     transfer_pickup_point = payload.get("transfer_pickup_point", old.get("transfer_pickup_point", ""))
     notes = payload.get("notes", old.get("notes", ""))
 
+    # ₹1000 Split Updates
+    transfer_cost = float(payload.get("transfer_cost", old.get("transfer_cost", 1000.0)))
+    transfer_driver_share = float(payload.get("transfer_driver_share", old.get("transfer_driver_share", 500.0)))
+    transfer_driver_paid = bool(payload.get("transfer_driver_paid", old.get("transfer_driver_paid", False)))
+    transfer_manoj_share = float(payload.get("transfer_manoj_share", old.get("transfer_manoj_share", 500.0)))
+    transfer_manoj_paid = bool(payload.get("transfer_manoj_paid", old.get("transfer_manoj_paid", False)))
+
     updates = {
         "driver_name": driver_name,
         "driver_fee": driver_fee,
@@ -396,6 +539,11 @@ async def update_transfer_driver(booking_id: str, payload: dict, user: dict = De
         "transfer_type": transfer_type,
         "flight_time": flight_time,
         "transfer_pickup_point": transfer_pickup_point,
+        "transfer_cost": transfer_cost,
+        "transfer_driver_share": transfer_driver_share,
+        "transfer_driver_paid": transfer_driver_paid,
+        "transfer_manoj_share": transfer_manoj_share,
+        "transfer_manoj_paid": transfer_manoj_paid,
         "notes": notes,
         "updated_at": now_iso(),
     }

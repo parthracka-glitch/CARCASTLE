@@ -82,6 +82,35 @@ class Car(BaseModel):
 BookingStatus = Literal["reserved", "car_received", "with_customer", "returned", "cancelled"]
 TransferStatus = Literal["none", "scheduled", "en_route", "completed", "cancelled"]
 TransferType = Literal["none", "airport_pickup", "airport_drop", "both"]
+PaymentMethod = Literal["cash", "online"]
+DepositStatus = Literal["none", "received", "refunded"]
+
+
+def calculate_9am_days(start_date: str, end_date: str, pickup_time: str = "09:00", drop_time: str = "09:00") -> int:
+    """
+    Calculate chargeable rental days using the 9:00 AM -> 9:00 AM rule.
+    - A booking day runs from 9:00 AM to next 9:00 AM.
+    - If the car is returned after 9:00 AM on the return day (drop_time > '09:00'), charge +1 extra day.
+    - Minimum is 1 day.
+    """
+    try:
+        s_date = str(start_date)[:10]
+        e_date = str(end_date)[:10]
+        s_dt = datetime.fromisoformat(s_date)
+        e_dt = datetime.fromisoformat(e_date)
+        diff_days = (e_dt - s_dt).days
+        if diff_days <= 0:
+            return 1
+            
+        base_days = diff_days
+        d_time = (drop_time or "09:00").strip()[:5]
+        
+        # If returned after 09:00 AM on return day, charge one additional full day
+        if d_time > "09:00":
+            return base_days + 1
+        return max(1, base_days)
+    except Exception:
+        return 1
 
 
 class BookingCreate(BaseModel):
@@ -91,15 +120,26 @@ class BookingCreate(BaseModel):
     car_id: str
     start_date: str  # ISO date
     end_date: str
-    days: Optional[int] = 1
+    pickup_time: Optional[str] = "09:00"
+    drop_time: Optional[str] = "09:00"
+    days: Optional[int] = None
     daily_cost_rate: Optional[float] = 0.0
     daily_customer_rate: Optional[float] = 0.0
     pickup_location: str
     drop_location: str
     cost_rate: float  # total paid to owner (₹)
     customer_rate: float  # total charged to customer (₹)
+    payment_method: Optional[PaymentMethod] = "cash"
+    deposit_amount: Optional[float] = 0.0
+    deposit_status: Optional[DepositStatus] = "none"
+    deposit_refunded_at: Optional[str] = None
     transfer_type: TransferType = "none"
     transfer_status: Optional[TransferStatus] = "scheduled"
+    transfer_cost: Optional[float] = 1000.0
+    transfer_driver_share: Optional[float] = 500.0
+    transfer_driver_paid: Optional[bool] = False
+    transfer_manoj_share: Optional[float] = 500.0
+    transfer_manoj_paid: Optional[bool] = False
     flight_time: Optional[str] = ""
     transfer_pickup_point: Optional[str] = ""
     assigned_agent_id: Optional[str] = None
@@ -117,6 +157,8 @@ class BookingUpdate(BaseModel):
     car_id: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    pickup_time: Optional[str] = None
+    drop_time: Optional[str] = None
     days: Optional[int] = None
     daily_cost_rate: Optional[float] = None
     daily_customer_rate: Optional[float] = None
@@ -124,9 +166,18 @@ class BookingUpdate(BaseModel):
     drop_location: Optional[str] = None
     cost_rate: Optional[float] = None
     customer_rate: Optional[float] = None
+    payment_method: Optional[PaymentMethod] = None
+    deposit_amount: Optional[float] = None
+    deposit_status: Optional[DepositStatus] = None
+    deposit_refunded_at: Optional[str] = None
     status: Optional[BookingStatus] = None
     transfer_type: Optional[TransferType] = None
     transfer_status: Optional[TransferStatus] = None
+    transfer_cost: Optional[float] = None
+    transfer_driver_share: Optional[float] = None
+    transfer_driver_paid: Optional[bool] = None
+    transfer_manoj_share: Optional[float] = None
+    transfer_manoj_paid: Optional[bool] = None
     flight_time: Optional[str] = None
     transfer_pickup_point: Optional[str] = None
     assigned_agent_id: Optional[str] = None
@@ -146,6 +197,8 @@ class Booking(BaseModel):
     owner_id: str
     start_date: str
     end_date: str
+    pickup_time: str = "09:00"
+    drop_time: str = "09:00"
     days: int = 1
     daily_cost_rate: float = 0.0
     daily_customer_rate: float = 0.0
@@ -153,10 +206,19 @@ class Booking(BaseModel):
     drop_location: str
     cost_rate: float
     customer_rate: float
+    payment_method: PaymentMethod = "cash"
+    deposit_amount: float = 0.0
+    deposit_status: DepositStatus = "none"
+    deposit_refunded_at: Optional[str] = None
     margin: float  # auto-calc: customer_rate - cost_rate
     status: BookingStatus = "reserved"
     transfer_type: TransferType = "none"
     transfer_status: TransferStatus = "none"
+    transfer_cost: float = 1000.0
+    transfer_driver_share: float = 500.0
+    transfer_driver_paid: bool = False
+    transfer_manoj_share: float = 500.0
+    transfer_manoj_paid: bool = False
     flight_time: str = ""
     transfer_pickup_point: str = ""
     assigned_agent_id: Optional[str] = None
