@@ -16,8 +16,9 @@ from models import new_id, now_iso
 
 
 async def main():
-    client = AsyncIOMotorClient(os.environ["MONGO_URL"])
-    db = client[os.environ["DB_NAME"]]
+    raw_url = os.environ.get("MONGO_URL", "")
+    client = AsyncIOMotorClient(raw_url.strip())
+    db = client[os.environ.get("DB_NAME", "car_castle_goa").strip()]
 
     # Wipe demo data (not users)
     for col in ["car_owners", "agents", "cars", "bookings", "ledger",

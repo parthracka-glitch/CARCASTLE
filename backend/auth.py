@@ -10,7 +10,7 @@ REFRESH_TOKEN_DAYS = 7
 
 
 def get_jwt_secret() -> str:
-    return os.environ["JWT_SECRET"]
+    return os.environ.get("JWT_SECRET", "carcastle-dev-secret-key-change-in-prod").strip()
 
 
 def hash_password(password: str) -> str:

@@ -92,16 +92,22 @@ app.add_middleware(
 async def _startup():
     from deps import set_db
     db = get_db()
+    db_name = (os.environ.get("DB_NAME") or "car_castle_goa").strip()
     try:
         await db.command("ping")
+        await create_indexes(db)
+        await seed(db)
     except Exception as e:
-        log.warning(f"MongoDB Atlas connection failed ({e}). Falling back to in-memory AsyncMongoMockClient.")
+        log.warning(f"MongoDB Atlas initialization failed ({e}). Falling back to in-memory AsyncMongoMockClient.")
         from mongomock_motor import AsyncMongoMockClient
-        db = AsyncMongoMockClient()[os.environ.get("DB_NAME", "car_castle_goa")]
+        db = AsyncMongoMockClient()[db_name]
         set_db(db)
-
-    await create_indexes(db)
-    await seed(db)
+        try:
+            await create_indexes(db)
+            await seed(db)
+        except Exception as mock_err:
+            log.error(f"Error seeding fallback DB: {mock_err}")
+            
     log.info("Startup complete — admins seeded, indexes ensured.")
 
 

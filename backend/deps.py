@@ -18,8 +18,9 @@ _db = None
 def get_db():
     global _client, _db
     if _db is None:
-        mongo_url = os.environ.get("MONGO_URL")
-        db_name = os.environ.get("DB_NAME", "car_castle_goa")
+        raw_mongo_url = os.environ.get("MONGO_URL")
+        mongo_url = raw_mongo_url.strip() if raw_mongo_url else None
+        db_name = (os.environ.get("DB_NAME") or "car_castle_goa").strip()
         
         if mongo_url:
             try:
@@ -27,7 +28,7 @@ def get_db():
                     mongo_url,
                     tlsCAFile=certifi.where(),
                     tlsAllowInvalidCertificates=True,
-                    serverSelectionTimeoutMS=3000
+                    serverSelectionTimeoutMS=5000
                 )
                 _db = _client[db_name]
             except Exception as e:

@@ -10,20 +10,20 @@ async def seed_users_and_settings(db):
     """Seed default super admin and operator accounts plus settings."""
     accounts = [
         {
-            "email": os.environ.get("SUPER_ADMIN_EMAIL", "admin@carcastlegoa.com"),
-            "password": os.environ.get("SUPER_ADMIN_PASSWORD", "admin123"),
+            "email": os.environ.get("SUPER_ADMIN_EMAIL", "admin@carcastlegoa.com").strip(),
+            "password": os.environ.get("SUPER_ADMIN_PASSWORD", "admin123").strip(),
             "name": "Super Admin",
             "role": "super_admin",
         },
         {
-            "email": os.environ.get("OP1_EMAIL", "operator1@carcastlegoa.com"),
-            "password": os.environ.get("OP1_PASSWORD", "operator123"),
+            "email": os.environ.get("OP1_EMAIL", "operator1@carcastlegoa.com").strip(),
+            "password": os.environ.get("OP1_PASSWORD", "operator123").strip(),
             "name": "Operator One",
             "role": "operator",
         },
         {
-            "email": os.environ.get("OP2_EMAIL", "operator2@carcastlegoa.com"),
-            "password": os.environ.get("OP2_PASSWORD", "operator123"),
+            "email": os.environ.get("OP2_EMAIL", "operator2@carcastlegoa.com").strip(),
+            "password": os.environ.get("OP2_PASSWORD", "operator123").strip(),
             "name": "Operator Two",
             "role": "operator",
         },
@@ -56,7 +56,7 @@ async def seed_users_and_settings(db):
     # Seed settings singleton
     existing_settings = await db.settings.find_one({"id": "default"})
     if not existing_settings:
-        savings = float(os.environ.get("SAVINGS_PERCENT", "10"))
+        savings = float(str(os.environ.get("SAVINGS_PERCENT", "10")).strip())
         await db.settings.insert_one({
             "id": "default",
             "savings_percent": savings,
