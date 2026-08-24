@@ -121,3 +121,60 @@ def test_additive_features_e2e():
     # Clean up test booking
     del_res = session.delete(f"{BASE_URL}/api/bookings/{b_id}", headers=headers)
     assert del_res.status_code == 200
+
+
+def test_unassigned_car_booking_flow():
+    session = requests.Session()
+    login_res = session.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "admin@carcastlegoa.com",
+        "password": "admin123"
+    })
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create booking with Direct Owner (No car_id, plate TBD)
+    unassigned_payload = {
+        "customer_name": "Vikram Sethi",
+        "customer_contact": "+91 91234 56789",
+        "owner_name": "Praveen Rane",
+        "owner_contact": "+91 99887 76655",
+        "car_model": "Ertiga VXI",
+        "car_registration": "TBD",
+        "start_date": "2026-09-10",
+        "end_date": "2026-09-12",
+        "pickup_time": "09:00",
+        "drop_time": "09:00",
+        "pickup_location": "Airport",
+        "drop_location": "Candolim",
+        "cost_rate": 3000,
+        "customer_rate": 5000,
+        "payment_method": "cash",
+        "deposit_amount": 2000,
+    }
+
+    create_res = session.post(f"{BASE_URL}/api/bookings", json=unassigned_payload, headers=headers)
+    assert create_res.status_code == 200
+    b = create_res.json()
+    b_id = b["id"]
+
+    assert b["car_id"] is None
+    assert b["car_model"] == "Ertiga VXI"
+    assert b["car_registration"] == "TBD"
+    assert b["owner_name"] == "Praveen Rane"
+    assert b["owner_id"] is not None
+
+    # 2. Check 1-click plate assignment endpoint
+    assign_res = session.put(f"{BASE_URL}/api/bookings/{b_id}/assign-car", json={
+        "car_registration": "GA-03-W-7788",
+        "car_model": "Ertiga ZXI (Assigned)",
+    }, headers=headers)
+    assert assign_res.status_code == 200
+    updated_b = assign_res.json()
+    assert updated_b["car_registration"] == "GA-03-W-7788"
+    assert updated_b["car_model"] == "Ertiga ZXI (Assigned)"
+
+    # Clean up
+    del_res = session.delete(f"{BASE_URL}/api/bookings/{b_id}", headers=headers)
+    assert del_res.status_code == 200
+

@@ -19,7 +19,14 @@ import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw } from "luci
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
-  car_id: "", start_date: "", end_date: "",
+  car_selection_mode: "fleet", // "fleet" | "direct"
+  car_id: "",
+  owner_id: "",
+  owner_name: "",
+  owner_contact: "",
+  car_model: "",
+  car_registration: "TBD",
+  start_date: "", end_date: "",
   pickup_time: "09:00", drop_time: "09:00",
   pickup_location: "", drop_location: "",
   daily_cost_rate: "", daily_customer_rate: "",
@@ -35,6 +42,7 @@ export default function BookingsPage() {
   const isOp = user?.role === "operator";
   const [rows, setRows] = useState([]);
   const [cars, setCars] = useState([]);
+  const [owners, setOwners] = useState([]);
   const [agents, setAgents] = useState([]);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -44,15 +52,24 @@ export default function BookingsPage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  // Quick Assign Plate Modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignTargetBooking, setAssignTargetBooking] = useState(null);
+  const [assignPlateInput, setAssignPlateInput] = useState("");
+  const [assignCarModelInput, setAssignCarModelInput] = useState("");
+  const [assigningPlate, setAssigningPlate] = useState(false);
+
   const load = async () => {
-    const [r, c, a] = await Promise.all([
+    const [r, c, a, o] = await Promise.all([
       api.get("/bookings"),
       api.get("/cars"),
       isOp ? Promise.resolve({ data: [] }) : api.get("/agents"),
+      api.get("/owners").catch(() => ({ data: [] })),
     ]);
     setRows(r.data);
     setCars(c.data);
     setAgents(a.data);
+    setOwners(o.data || []);
   };
 
   useEffect(() => { load(); }, []); // eslint-disable-line
@@ -106,8 +123,16 @@ export default function BookingsPage() {
       const totalCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
       const depositAmt = Number(form.deposit_amount || 0);
 
+      const isDirect = form.car_selection_mode === "direct";
+
       const payload = {
         ...form,
+        car_id: isDirect ? null : (form.car_id || null),
+        owner_id: isDirect ? (form.owner_id || null) : null,
+        owner_name: isDirect ? form.owner_name : "",
+        owner_contact: isDirect ? form.owner_contact : "",
+        car_model: isDirect ? (form.car_model || "Standard Vehicle") : "",
+        car_registration: isDirect ? (form.car_registration || "TBD") : "",
         days: calcDays,
         pickup_time: form.pickup_time || "09:00",
         drop_time: form.drop_time || "09:00",
@@ -147,7 +172,13 @@ export default function BookingsPage() {
       customer_name: b.customer_name || "",
       customer_contact: b.customer_contact || "",
       customer_id_proof: b.customer_id_proof || "",
+      car_selection_mode: b.car_id ? "fleet" : "direct",
       car_id: b.car_id || "",
+      owner_id: b.owner_id || "",
+      owner_name: b.owner_name || "",
+      owner_contact: "",
+      car_model: b.car_model || "",
+      car_registration: b.car_registration || "TBD",
       start_date: (b.start_date || "").slice(0, 10),
       end_date: (b.end_date || "").slice(0, 10),
       pickup_time: b.pickup_time || "09:00",
@@ -169,6 +200,25 @@ export default function BookingsPage() {
       notes: b.notes || "",
     });
     setOpen(true);
+  };
+
+  const saveAssignedPlate = async () => {
+    if (!assignTargetBooking) return;
+    setAssigningPlate(true);
+    try {
+      await api.put(`/bookings/${assignTargetBooking.id}/assign-car`, {
+        car_registration: assignPlateInput.trim() || "TBD",
+        car_model: assignCarModelInput.trim() || assignTargetBooking.car_model,
+      });
+      toast.success(`Plate updated to ${assignPlateInput.trim() || "TBD"}`);
+      setAssignModalOpen(false);
+      setAssignTargetBooking(null);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to assign car plate");
+    } finally {
+      setAssigningPlate(false);
+    }
   };
 
   const refundDeposit = async (b) => {
@@ -233,21 +283,126 @@ export default function BookingsPage() {
               <Field label="ID proof">
                 <Input value={form.customer_id_proof} onChange={(e) => setForm({ ...form, customer_id_proof: e.target.value })} placeholder="Aadhaar/DL last 4" />
               </Field>
-              <Field label="Car">
-                <Select value={form.car_id} onValueChange={(v) => {
-                  const c = cars.find((x) => x.id === v);
-                  const rate = c?.default_cost_rate ? String(c.default_cost_rate) : form.daily_cost_rate;
-                  const totalCost = rate ? String(Number(rate) * days) : form.cost_rate;
-                  setForm({ ...form, car_id: v, daily_cost_rate: rate, cost_rate: totalCost });
-                }}>
-                  <SelectTrigger data-testid="booking-car-select"><SelectValue placeholder="Select car" /></SelectTrigger>
-                  <SelectContent>
-                    {cars.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.model} · {c.registration_no}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              {/* Vehicle & Owner Selection */}
+              <div className="sm:col-span-2 space-y-2.5 border border-[#C3E7F1] rounded-xl p-3 bg-[#F4FAFC]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <Label className="text-xs font-bold text-[#20373B]">Vehicle & Owner Selection</Label>
+                  <div className="flex bg-slate-200/80 p-0.5 rounded-lg text-xs font-semibold self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, car_selection_mode: "fleet" })}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                        form.car_selection_mode !== "direct"
+                          ? "bg-white text-[#20373B] shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      🚗 Fleet Car
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, car_selection_mode: "direct", car_id: "" })}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                        form.car_selection_mode === "direct"
+                          ? "bg-[#20373B] text-[#FFC64F] shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      ⚡ Direct Owner (Plate TBD)
+                    </button>
+                  </div>
+                </div>
+
+                {form.car_selection_mode !== "direct" ? (
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1 block">Select Registered Car</Label>
+                    <Select value={form.car_id} onValueChange={(v) => {
+                      const c = cars.find((x) => x.id === v);
+                      const rate = c?.default_cost_rate ? String(c.default_cost_rate) : form.daily_cost_rate;
+                      const totalCost = rate ? String(Number(rate) * days) : form.cost_rate;
+                      setForm({ ...form, car_id: v, daily_cost_rate: rate, cost_rate: totalCost, car_model: c?.model || "", car_registration: c?.registration_no || "" });
+                    }}>
+                      <SelectTrigger data-testid="booking-car-select"><SelectValue placeholder="Select car from fleet" /></SelectTrigger>
+                      <SelectContent>
+                        {cars.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.model} · {c.registration_no} ({c.owner_name})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Owner</Label>
+                      {owners.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <Select value={form.owner_id || "custom"} onValueChange={(v) => {
+                            if (v === "custom") {
+                              setForm({ ...form, owner_id: "", owner_name: "", owner_contact: "" });
+                            } else {
+                              const o = owners.find((x) => x.id === v);
+                              setForm({ ...form, owner_id: v, owner_name: o?.name || "", owner_contact: o?.contact || "" });
+                            }
+                          }}>
+                            <SelectTrigger><SelectValue placeholder="Select Owner or New" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="custom">+ Type New Owner Name</SelectItem>
+                              {owners.map((o) => (
+                                <SelectItem key={o.id} value={o.id}>{o.name} ({o.contact})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {!form.owner_id && (
+                            <Input
+                              placeholder="Owner Name (e.g. Sanjay Kamat)"
+                              value={form.owner_name}
+                              onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+                              className="mt-1 text-xs bg-white"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <Input
+                          placeholder="Owner Name (e.g. Sanjay Kamat)"
+                          value={form.owner_name}
+                          onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+                          className="text-xs bg-white"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Car Name / Model</Label>
+                      <Input
+                        placeholder="e.g. Swift, Ertiga, Thar, Innova"
+                        value={form.car_model}
+                        onChange={(e) => setForm({ ...form, car_model: e.target.value })}
+                        className="text-xs bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Car Number / Plate (Optional)</Label>
+                      <Input
+                        placeholder="TBD (or GA-03-XX-XXXX if known)"
+                        value={form.car_registration}
+                        onChange={(e) => setForm({ ...form, car_registration: e.target.value })}
+                        className="text-xs bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Owner Phone (Optional)</Label>
+                      <Input
+                        placeholder="+91 98765 43210"
+                        value={form.owner_contact}
+                        onChange={(e) => setForm({ ...form, owner_contact: e.target.value })}
+                        className="text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Pickup Date + Time */}
               <div className="space-y-1.5">
@@ -570,10 +725,26 @@ export default function BookingsPage() {
                     </a>
                   </div>
                   <div className="text-right">
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
-                      {b.car_registration}
-                    </span>
+                    {!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignTargetBooking(b);
+                          setAssignPlateInput("");
+                          setAssignCarModelInput(b.car_model && b.car_model !== "—" ? b.car_model : "");
+                          setAssignModalOpen(true);
+                        }}
+                        className="inline-block px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[10px] font-bold text-amber-900 shadow-xs hover:bg-amber-200"
+                      >
+                        ⚠️ Plate TBD · Assign
+                      </button>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-[#F4FAFC] border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
+                        {b.car_registration}
+                      </span>
+                    )}
                     <div className="text-[11px] text-slate-500 font-medium">{b.car_model}</div>
+                    <div className="text-[10px] text-slate-400">Owner: {b.owner_name || "—"}</div>
                   </div>
                 </div>
 
@@ -661,7 +832,22 @@ export default function BookingsPage() {
                 })()}
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-2 pt-1">
+                <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+                  {(!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAssignTargetBooking(b);
+                        setAssignPlateInput("");
+                        setAssignCarModelInput(b.car_model && b.car_model !== "—" ? b.car_model : "");
+                        setAssignModalOpen(true);
+                      }}
+                      className="h-8 text-xs font-semibold text-amber-800 border-amber-300 bg-amber-50 hover:bg-amber-100"
+                    >
+                      Assign Plate
+                    </Button>
+                  )}
                   {depAmt > 0 && b.deposit_status === "received" && (
                     <Button
                       variant="outline"
@@ -706,7 +892,7 @@ export default function BookingsPage() {
               <tr>
                 <th className="text-left px-5 py-2.5 font-semibold">Dates & Times</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Customer</th>
-                <th className="text-left px-5 py-2.5 font-semibold">Car</th>
+                <th className="text-left px-5 py-2.5 font-semibold">Car & Plate</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Payment</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Deposit</th>
                 <th className="text-left px-5 py-2.5 font-semibold">Status</th>
@@ -747,8 +933,29 @@ export default function BookingsPage() {
                       <div className="text-xs text-slate-500">{b.customer_contact}</div>
                     </td>
                     <td className="px-5 py-2.5">
-                      <div className="text-slate-700">{b.car_model}</div>
-                      <div className="text-xs text-slate-500 font-mono">{b.car_registration}</div>
+                      <div className="text-slate-800 font-medium">{b.car_model || "Standard Vehicle"}</div>
+                      {!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—" ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            ⚠️ Plate TBD
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignTargetBooking(b);
+                              setAssignPlateInput("");
+                              setAssignCarModelInput(b.car_model && b.car_model !== "—" ? b.car_model : "");
+                              setAssignModalOpen(true);
+                            }}
+                            className="text-[10px] font-bold text-[#20373B] underline hover:text-[#519CAB]"
+                          >
+                            Assign Plate
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500 font-mono">{b.car_registration}</div>
+                      )}
+                      <div className="text-[11px] text-slate-400">Owner: {b.owner_name || "—"}</div>
                     </td>
                     <td className="px-5 py-2.5 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -795,23 +1002,37 @@ export default function BookingsPage() {
                         {bDays > 1 && <div className="text-[10px] text-slate-400">₹{Math.round(dCost)}/day</div>}
                       </td>
                     )}
-                    <td className="px-5 py-2.5 text-right font-tabular">
-                      <div className="font-bold text-[#20373B]">{formatInr(b.customer_rate)}</div>
-                      {bDays > 1 && <div className="text-[10px] text-slate-400">₹{Math.round(dCust)}/day</div>}
+                    <td className="px-5 py-2.5 text-right font-tabular font-bold text-slate-900">
+                      {formatInr(b.customer_rate)}
+                      {bDays > 1 && <div className="text-[10px] text-slate-400 font-normal">₹{Math.round(dCust)}/day</div>}
                     </td>
                     {!isOp && (
-                      <td className="px-5 py-2.5 text-right font-tabular">
-                        <div className="text-emerald-700 font-extrabold text-[15px]">{formatInr(b.margin)}</div>
+                      <td className="px-5 py-2.5 text-right font-tabular font-extrabold text-emerald-700">
+                        {formatInr(b.margin)}
                       </td>
                     )}
-                    <td className="px-5 py-2.5 text-right whitespace-nowrap space-x-1">
-                      {depAmt > 0 && b.deposit_status === "received" && (
+                    <td className="px-5 py-2.5 text-right space-x-1 whitespace-nowrap">
+                      {(!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—") && (
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => {
+                            setAssignTargetBooking(b);
+                            setAssignPlateInput("");
+                            setAssignCarModelInput(b.car_model && b.car_model !== "—" ? b.car_model : "");
+                            setAssignModalOpen(true);
+                          }}
+                          className="h-7 text-[11px] font-semibold text-amber-800 border-amber-300 bg-amber-50 hover:bg-amber-100"
+                        >
+                          Assign Plate
+                        </Button>
+                      )}
+                      {depAmt > 0 && b.deposit_status === "received" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => refundDeposit(b)}
-                          className="text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8"
-                          title="Refund security deposit"
+                          className="text-emerald-700 hover:text-emerald-800 text-xs"
                         >
                           Refund Dep.
                         </Button>
@@ -831,6 +1052,53 @@ export default function BookingsPage() {
           </table>
         </div>
       </div>
+
+      {/* 🚀 Quick Assign Vehicle Plate Modal */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#20373B] font-bold">Assign Vehicle Plate / Car</DialogTitle>
+          </DialogHeader>
+          {assignTargetBooking && (
+            <div className="space-y-3 py-2">
+              <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl text-xs space-y-1">
+                <div className="font-bold text-[#20373B] text-sm">{assignTargetBooking.customer_name}</div>
+                <div className="text-slate-600">Owner: <span className="font-semibold text-slate-800">{assignTargetBooking.owner_name || "—"}</span></div>
+                <div className="text-slate-500">Rental: {formatDate(assignTargetBooking.start_date)} → {formatDate(assignTargetBooking.end_date)}</div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">Vehicle Registration / Plate Number</Label>
+                <Input
+                  placeholder="e.g. GA-03-W-1234"
+                  value={assignPlateInput}
+                  onChange={(e) => setAssignPlateInput(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">Car Model / Name</Label>
+                <Input
+                  placeholder="e.g. Swift, Ertiga, Thar"
+                  value={assignCarModelInput}
+                  onChange={(e) => setAssignCarModelInput(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Cancel</Button>
+            <Button
+              onClick={saveAssignedPlate}
+              disabled={assigningPlate}
+              className="bg-[#20373B] text-[#FFC64F] font-bold hover:bg-[#2C494E]"
+            >
+              {assigningPlate ? "Saving..." : "Save Plate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

@@ -467,7 +467,16 @@ function RecentTable({ rows, isOperator, onRefundDeposit }) {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="font-bold text-[#20373B] text-sm">{b.customer_name}</div>
-                  <div className="text-xs text-slate-500">{b.car_model} · <span className="font-mono text-[#519CAB]">{b.car_registration}</span></div>
+                  <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                    <span>{b.car_model || "Standard Vehicle"}</span>
+                    {!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—" ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                        ⚠️ Plate TBD
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[#519CAB]">{b.car_registration}</span>
+                    )}
+                  </div>
                 </div>
                 <StatusPill status={b.status} />
               </div>
@@ -509,7 +518,7 @@ function RecentTable({ rows, isOperator, onRefundDeposit }) {
             <tr>
               <th className="text-left px-5 py-3 font-bold">Start</th>
               <th className="text-left px-5 py-3 font-bold">Customer</th>
-              <th className="text-left px-5 py-3 font-bold">Car</th>
+              <th className="text-left px-5 py-3 font-bold">Car & Plate</th>
               <th className="text-left px-5 py-3 font-bold">Payment</th>
               <th className="text-left px-5 py-3 font-bold">Deposit</th>
               <th className="text-left px-5 py-3 font-bold">Status</th>
@@ -518,7 +527,7 @@ function RecentTable({ rows, isOperator, onRefundDeposit }) {
               {!isOperator && <th className="text-right px-5 py-3 font-bold">Margin</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#C3E7F1]/50">
+          <tbody className="divide-y divide-[#C3E7F1]/40">
             {rows.map((b) => {
               const isCash = (b.payment_method || "cash") === "cash";
               const depAmt = Number(b.deposit_amount || 0);
@@ -528,7 +537,14 @@ function RecentTable({ rows, isOperator, onRefundDeposit }) {
                   <td className="px-5 py-3 text-slate-700">{formatDate(b.start_date)}</td>
                   <td className="px-5 py-3 font-semibold text-[#20373B]">{b.customer_name}</td>
                   <td className="px-5 py-3 text-slate-600">
-                    {b.car_model} <span className="text-[#519CAB] font-mono text-xs ml-1">{b.car_registration}</span>
+                    <span>{b.car_model || "Standard"}</span>
+                    {!b.car_registration || b.car_registration === "TBD" || b.car_registration === "—" ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 ml-1.5">
+                        ⚠️ Plate TBD
+                      </span>
+                    ) : (
+                      <span className="text-[#519CAB] font-mono text-xs ml-1.5">{b.car_registration}</span>
+                    )}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from models import BookingCreate, BookingUpdate, new_id, now_iso, calculate_9am_days
+from models import BookingCreate, BookingUpdate, AssignCarIn, new_id, now_iso, calculate_9am_days
 from deps import get_db, get_current_user, require_super_admin, log_activity
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -99,10 +99,10 @@ async def list_bookings(
     agent_map = {a["id"]: a for a in await db.agents.find({}, {"_id": 0}).to_list(1000)}
 
     for b in bookings:
-        car = car_map.get(b["car_id"], {})
-        b["car_model"] = car.get("model", "—")
-        b["car_registration"] = car.get("registration_no", "—")
-        b["owner_name"] = owner_map.get(b.get("owner_id", ""), {}).get("name", "—")
+        car = car_map.get(b.get("car_id"), {})
+        b["car_model"] = b.get("car_model") or car.get("model", "—")
+        b["car_registration"] = b.get("car_registration") or car.get("registration_no", "TBD")
+        b["owner_name"] = b.get("owner_name") or owner_map.get(b.get("owner_id", ""), {}).get("name", "—")
         if b.get("assigned_agent_id"):
             b["agent_name"] = agent_map.get(b["assigned_agent_id"], {}).get("name", "—")
         else:
@@ -117,9 +117,54 @@ async def list_bookings(
 @router.post("")
 async def create_booking(payload: BookingCreate, user: dict = Depends(get_current_user)):
     db = get_db()
-    car = await db.cars.find_one({"id": payload.car_id})
-    if not car:
-        raise HTTPException(400, "Car not found")
+    
+    car_id = None
+    car_model = (payload.car_model or "").strip()
+    car_registration = (payload.car_registration or "TBD").strip()
+    owner_id = payload.owner_id
+    owner_name = (payload.owner_name or "").strip()
+
+    if payload.car_id:
+        car = await db.cars.find_one({"id": payload.car_id})
+        if not car:
+            raise HTTPException(400, "Selected car not found")
+        car_id = car["id"]
+        car_model = car.get("model", car_model or "Standard Vehicle")
+        car_registration = car.get("registration_no", car_registration or "TBD")
+        owner_id = car.get("owner_id")
+        owner_doc = await db.car_owners.find_one({"id": owner_id})
+        owner_name = owner_doc.get("name", owner_name) if owner_doc else owner_name
+    else:
+        # Unassigned / Direct Owner booking
+        if owner_id:
+            owner_doc = await db.car_owners.find_one({"id": owner_id})
+            if not owner_doc:
+                raise HTTPException(400, "Selected owner not found")
+            owner_name = owner_doc.get("name", owner_name)
+        elif owner_name:
+            existing_owner = await db.car_owners.find_one({"name": {"$regex": f"^{owner_name}$", "$options": "i"}})
+            if existing_owner:
+                owner_id = existing_owner["id"]
+                owner_name = existing_owner.get("name", owner_name)
+            else:
+                owner_id = new_id()
+                owner_doc = {
+                    "id": owner_id,
+                    "name": owner_name,
+                    "contact": (payload.owner_contact or "").strip(),
+                    "notes": "Auto-created via Quick Booking",
+                    "total_owed": 0.0,
+                    "total_paid": 0.0,
+                    "created_at": now_iso(),
+                }
+                await db.car_owners.insert_one(owner_doc)
+        else:
+            raise HTTPException(400, "Please select a car from fleet or specify owner name.")
+
+        if not car_model:
+            car_model = "Standard Vehicle"
+        if not car_registration:
+            car_registration = "TBD"
 
     if payload.assigned_agent_id:
         agent = await db.agents.find_one({"id": payload.assigned_agent_id})
@@ -161,6 +206,11 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     deposit_status = payload.deposit_status or ("received" if deposit_amt > 0 else "none")
 
     booking_dict = payload.model_dump()
+    booking_dict["car_id"] = car_id
+    booking_dict["car_model"] = car_model
+    booking_dict["car_registration"] = car_registration
+    booking_dict["owner_id"] = owner_id
+    booking_dict["owner_name"] = owner_name
     booking_dict["days"] = days
     booking_dict["daily_cost_rate"] = daily_cost
     booking_dict["daily_customer_rate"] = daily_customer
@@ -183,7 +233,6 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     booking = {
         "id": new_id(),
         **booking_dict,
-        "owner_id": car["owner_id"],
         "margin": margin,
         "net_profit": net_profit,
         "status": "reserved",
@@ -196,12 +245,53 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     await db.bookings.insert_one(booking)
     await _add_ledger_entries_for_booking(db, booking, user)
     await log_activity(db, user, "create", "bookings", booking["id"],
-                       {"customer": payload.customer_name, "days": days, "margin": margin, "deposit": deposit_amt})
+                       {"customer": payload.customer_name, "car_model": car_model, "car_registration": car_registration, "margin": margin})
 
     booking.pop("_id", None)
     if user["role"] == "operator":
         booking = _sanitize_for_operator(booking)
     return booking
+
+
+@router.put("/{booking_id}/assign-car")
+async def assign_car(booking_id: str, payload: AssignCarIn, user: dict = Depends(get_current_user)):
+    """1-click assign or update car registration / model for an unassigned booking."""
+    db = get_db()
+    old = await db.bookings.find_one({"id": booking_id})
+    if not old:
+        raise HTTPException(404, "Booking not found")
+
+    updates = {}
+    if payload.car_id:
+        car = await db.cars.find_one({"id": payload.car_id})
+        if car:
+            updates["car_id"] = car["id"]
+            updates["car_model"] = car.get("model", "")
+            updates["car_registration"] = car.get("registration_no", "")
+            if car.get("owner_id"):
+                updates["owner_id"] = car["owner_id"]
+                owner_doc = await db.car_owners.find_one({"id": car["owner_id"]})
+                if owner_doc:
+                    updates["owner_name"] = owner_doc.get("name", "")
+
+    if payload.car_model:
+        updates["car_model"] = payload.car_model.strip()
+    if payload.car_registration:
+        updates["car_registration"] = payload.car_registration.strip()
+    if payload.owner_id:
+        updates["owner_id"] = payload.owner_id
+    if payload.owner_name:
+        updates["owner_name"] = payload.owner_name.strip()
+
+    updates["updated_at"] = now_iso()
+
+    await db.bookings.update_one({"id": booking_id}, {"$set": updates})
+    await log_activity(db, user, "assign_car", "bookings", booking_id, updates)
+
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if user["role"] == "operator":
+        b = _sanitize_for_operator(b)
+    return b
 
 
 @router.put("/{booking_id}/refund-deposit")
@@ -235,11 +325,11 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Booking not found")
-    car = await db.cars.find_one({"id": b["car_id"]}, {"_id": 0}) or {}
-    b["car_model"] = car.get("model", "—")
-    b["car_registration"] = car.get("registration_no", "—")
+    car = await db.cars.find_one({"id": b.get("car_id")}, {"_id": 0}) or {}
+    b["car_model"] = b.get("car_model") or car.get("model", "—")
+    b["car_registration"] = b.get("car_registration") or car.get("registration_no", "TBD")
     owner = await db.car_owners.find_one({"id": b.get("owner_id")}, {"_id": 0}) or {}
-    b["owner_name"] = owner.get("name", "—")
+    b["owner_name"] = b.get("owner_name") or owner.get("name", "—")
     if b.get("assigned_agent_id"):
         agent = await db.agents.find_one({"id": b["assigned_agent_id"]}, {"_id": 0}) or {}
         b["agent_name"] = agent.get("name", "—")

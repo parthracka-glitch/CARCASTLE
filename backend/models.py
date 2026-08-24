@@ -117,7 +117,12 @@ class BookingCreate(BaseModel):
     customer_name: str
     customer_contact: str
     customer_id_proof: Optional[str] = ""
-    car_id: str
+    car_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = ""
+    owner_contact: Optional[str] = ""
+    car_model: Optional[str] = ""
+    car_registration: Optional[str] = "TBD"
     start_date: str  # ISO date
     end_date: str
     pickup_time: Optional[str] = "09:00"
@@ -155,6 +160,10 @@ class BookingUpdate(BaseModel):
     customer_contact: Optional[str] = None
     customer_id_proof: Optional[str] = None
     car_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
+    car_model: Optional[str] = None
+    car_registration: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     pickup_time: Optional[str] = None
@@ -188,13 +197,24 @@ class BookingUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class AssignCarIn(BaseModel):
+    car_id: Optional[str] = None
+    car_model: Optional[str] = None
+    car_registration: Optional[str] = None
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
+
+
 class Booking(BaseModel):
     id: str = Field(default_factory=new_id)
     customer_name: str
     customer_contact: str
     customer_id_proof: str = ""
-    car_id: str
-    owner_id: str
+    car_id: Optional[str] = None
+    car_model: Optional[str] = "—"
+    car_registration: Optional[str] = "TBD"
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = "—"
     start_date: str
     end_date: str
     pickup_time: str = "09:00"
