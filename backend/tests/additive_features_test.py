@@ -173,3 +173,32 @@ def test_unassigned_car_booking_flow():
     del_res = session.delete(f"{BASE_URL}/api/bookings/{b_id}", headers=headers)
     assert del_res.status_code == 200
 
+
+def test_pdf_and_excel_exports():
+    session = requests.Session()
+    login_res = session.post(f"{BASE_URL}/api/auth/login", json={
+        "email": "admin@carcastlegoa.com",
+        "password": "admin123"
+    })
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Test All-Time PDF report
+    pdf_res = session.get(f"{BASE_URL}/api/reports/monthly.pdf?month=all", headers=headers)
+    assert pdf_res.status_code == 200
+    assert pdf_res.headers["content-type"] == "application/pdf"
+    assert len(pdf_res.content) > 1000
+
+    # 2. Test All-Time Excel report
+    xlsx_res = session.get(f"{BASE_URL}/api/reports/monthly.xlsx?month=all", headers=headers)
+    assert xlsx_res.status_code == 200
+    assert "spreadsheetml" in xlsx_res.headers["content-type"]
+    assert len(xlsx_res.content) > 1000
+
+    # 3. Test Specific Month Excel report
+    month_xlsx_res = session.get(f"{BASE_URL}/api/reports/monthly.xlsx?month=2026-08", headers=headers)
+    assert month_xlsx_res.status_code == 200
+    assert len(month_xlsx_res.content) > 1000
+
+

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import StatusPill from "@/components/StatusPill";
-import { api, formatInr, formatDate, formatApiError } from "@/lib/api";
+import { api, API, formatInr, formatDate, formatApiError } from "@/lib/api";
 import { calculateRentalDays, isDropAfter9AM, formatTime12h } from "@/lib/dateUtils";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw } from "lucide-react";
+import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download } from "lucide-react";
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
@@ -253,6 +253,33 @@ export default function BookingsPage() {
     }
   };
 
+  const downloadReport = async (kind) => {
+    try {
+      const url = `${API}/reports/monthly.${kind}?month=all`;
+      const res = await fetch(url, {
+        credentials: "include",
+        headers: (() => {
+          const t = localStorage.getItem("ccg_token");
+          return t ? { Authorization: `Bearer ${t}` } : {};
+        })(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || res.statusText);
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `car-castle-goa-bookings-master.${kind}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success(`${kind.toUpperCase()} report exported successfully!`);
+    } catch (e) {
+      toast.error(e.message || "Failed to export report");
+    }
+  };
+
   const computedTotalCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
   const computedTotalCost = form.daily_cost_rate ? Number(form.daily_cost_rate) * days : Number(form.cost_rate || 0);
   const computedMargin = computedTotalCustomer - computedTotalCost;
@@ -263,12 +290,35 @@ export default function BookingsPage() {
       title="Bookings"
       subtitle={`${rows.length} total · ${filtered.length} shown`}
       actions={
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(empty); } }}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-md" data-testid="new-booking-button">
-              <Plus className="w-4 h-4 mr-1" /> New booking
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isOp && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadReport("xlsx")}
+                className="bg-white border-[#C3E7F1] text-emerald-800 hover:bg-emerald-50 text-xs font-semibold h-9"
+                title="Download live Excel master"
+              >
+                <Table2 className="w-4 h-4 mr-1.5 text-emerald-600" /> Export Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadReport("pdf")}
+                className="bg-white border-[#C3E7F1] text-red-800 hover:bg-red-50 text-xs font-semibold h-9"
+                title="Download live PDF report"
+              >
+                <FileText className="w-4 h-4 mr-1.5 text-red-600" /> Export PDF
+              </Button>
+            </>
+          )}
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(empty); } }}>
+            <DialogTrigger asChild>
+              <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-md h-9" data-testid="new-booking-button">
+                <Plus className="w-4 h-4 mr-1" /> New booking
+              </Button>
+            </DialogTrigger>
           <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[88vh] overflow-y-auto p-4 sm:p-6">
             <DialogHeader>
               <DialogTitle className="text-[#20373B] font-bold text-lg">{editing ? "Edit booking" : "New booking"}</DialogTitle>
@@ -674,6 +724,7 @@ export default function BookingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       }
     >
       <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
