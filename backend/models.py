@@ -88,9 +88,9 @@ DepositStatus = Literal["none", "received", "refunded"]
 
 def calculate_9am_days(start_date: str, end_date: str, pickup_time: str = "09:00", drop_time: str = "09:00") -> int:
     """
-    Calculate chargeable rental days using the 9:00 AM -> 9:00 AM rule.
-    - A booking day runs from 9:00 AM to next 9:00 AM.
-    - If the car is returned after 9:00 AM on the return day (drop_time > '09:00'), charge +1 extra day.
+    Calculate chargeable rental days using the 9:00 AM -> 9:30 AM rule.
+    - A standard booking day runs 9:00 AM to 9:00 AM.
+    - If the car is returned after 9:30 AM on the return day (drop_time > '09:30'), charge +1 extra day (T+1).
     - Minimum is 1 day.
     """
     try:
@@ -105,8 +105,8 @@ def calculate_9am_days(start_date: str, end_date: str, pickup_time: str = "09:00
         base_days = diff_days
         d_time = (drop_time or "09:00").strip()[:5]
         
-        # If returned after 09:00 AM on return day, charge one additional full day
-        if d_time > "09:00":
+        # If returned after 09:30 AM on return day, charge one additional full day (T+1)
+        if d_time > "09:30":
             return base_days + 1
         return max(1, base_days)
     except Exception:

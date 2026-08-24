@@ -457,7 +457,7 @@ export default function BookingsPage() {
                   </span>
                   {isDropAfter9AM(form.drop_time) && (
                     <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md font-semibold text-[11px]">
-                      ⚡ Drop after 9:00 AM (+1 day charged)
+                      ⚡ Drop after 9:30 AM (+1 day charged)
                     </span>
                   )}
                 </div>
@@ -923,7 +923,7 @@ export default function BookingsPage() {
                         <span>⏱️ {bDays} Day{bDays > 1 ? "s" : ""}</span>
                         {isDropAfter9AM(b.drop_time) && (
                           <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                            9AM+ rule
+                            9:30AM+ rule
                           </span>
                         )}
                       </div>

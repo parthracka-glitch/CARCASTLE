@@ -1,10 +1,10 @@
 /**
  * Date and day calculation utilities for Car Castle Goa.
  * 
- * 9AM–9AM Rule:
+ * 9AM–9:30AM Rule:
  * - A booking day runs from 09:00 AM to the next 09:00 AM.
- * - If the car is returned after 09:00 AM on the return day (e.g. 09:30, 11:00, 14:00),
- *   charge one additional full day.
+ * - If the car is returned after 09:30 AM on the return day (e.g. 09:35, 11:00, 14:00),
+ *   automatically charge one additional full day (T+1).
  * - Minimum duration is 1 day.
  */
 
@@ -26,8 +26,8 @@ export function calculateRentalDays(startDate, endDate, pickupTime = "09:00", dr
     let baseDays = diffDays;
     const dTime = (dropTime || "09:00").trim().slice(0, 5);
 
-    // If returned after 09:00 AM on the return day, add 1 extra full day
-    if (dTime > "09:00") {
+    // If returned after 09:30 AM on the return day, add 1 extra full day (T+1)
+    if (dTime > "09:30") {
       return baseDays + 1;
     }
 
@@ -39,8 +39,10 @@ export function calculateRentalDays(startDate, endDate, pickupTime = "09:00", dr
 
 export function isDropAfter9AM(dropTime) {
   const t = (dropTime || "09:00").trim().slice(0, 5);
-  return t > "09:00";
+  return t > "09:30";
 }
+
+export const isDropAfter930AM = isDropAfter9AM;
 
 export function formatTime12h(time24) {
   if (!time24) return "09:00 AM";

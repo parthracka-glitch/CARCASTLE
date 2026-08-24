@@ -1,32 +1,27 @@
 import os
+import sys
 import pytest
 import requests
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 BASE_URL = "http://localhost:8000"
 
 def test_9am_day_calculation_units():
-    # Direct math check for 9AM rule
-    def calc_days(s, e, p_time="09:00", d_time="09:00"):
-        from datetime import datetime
-        s_dt = datetime.fromisoformat(str(s)[:10])
-        e_dt = datetime.fromisoformat(str(e)[:10])
-        diff = (e_dt - s_dt).days
-        if diff <= 0:
-            return 1
-        base = diff
-        if (d_time or "09:00").strip()[:5] > "09:00":
-            return base + 1
-        return max(1, base)
+    # Direct math check for 9:30 AM rule (T+1 when drop_time > 09:30)
+    from models import calculate_9am_days
 
-    # 25th Aug 09:00 to 27th Aug 09:00 -> exactly 2 days
-    assert calc_days("2026-08-25", "2026-08-27", "09:00", "09:00") == 2
-    # 25th Aug 09:00 to 27th Aug 08:30 -> 2 days
-    assert calc_days("2026-08-25", "2026-08-27", "09:00", "08:30") == 2
-    # 25th Aug 09:00 to 27th Aug 09:30 -> 3 days
-    assert calc_days("2026-08-25", "2026-08-27", "09:00", "09:30") == 3
-    # 25th Aug 09:00 to 27th Aug 14:00 -> 3 days
-    assert calc_days("2026-08-25", "2026-08-27", "09:00", "14:00") == 3
+    # 25th Aug 09:00 to 27th Aug 09:00 -> exactly 2 days (T)
+    assert calculate_9am_days("2026-08-25", "2026-08-27", "09:00", "09:00") == 2
+    # 25th Aug 09:00 to 27th Aug 08:30 -> 2 days (T)
+    assert calculate_9am_days("2026-08-25", "2026-08-27", "09:00", "08:30") == 2
+    # 25th Aug 09:00 to 27th Aug 09:30 -> 2 days (30-min grace period)
+    assert calculate_9am_days("2026-08-25", "2026-08-27", "09:00", "09:30") == 2
+    # 25th Aug 09:00 to 27th Aug 09:35 -> 3 days (T+1)
+    assert calculate_9am_days("2026-08-25", "2026-08-27", "09:00", "09:35") == 3
+    # 25th Aug 09:00 to 27th Aug 14:00 -> 3 days (T+1)
+    assert calculate_9am_days("2026-08-25", "2026-08-27", "09:00", "14:00") == 3
 
 
 def test_additive_features_e2e():
