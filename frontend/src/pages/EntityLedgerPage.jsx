@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import StatusPill from "@/components/StatusPill";
 import { api, formatInr, formatDate, formatApiError } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,11 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Bell, IndianRupee, Loader2, User, Phone, CheckCircle2 } from "lucide-react";
+import { Bell, IndianRupee, Loader2, User, Phone, CheckCircle2, Trash2 } from "lucide-react";
 
 export default function EntityLedgerPage({ type }) {
   const isOwner = type === "owner";
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canWrite = user?.role === "super_admin";
+
   const [entity, setEntity] = useState(null);
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +27,8 @@ export default function EntityLedgerPage({ type }) {
   const [payEntry, setPayEntry] = useState(null);
   const [payAmt, setPayAmt] = useState("");
   const [payNote, setPayNote] = useState("");
+  const [delOpen, setDelOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     const [e, l] = await Promise.all([
@@ -33,6 +40,18 @@ export default function EntityLedgerPage({ type }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [id]); // eslint-disable-line
+
+  const deleteEntity = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/${isOwner ? "owners" : "agents"}/${id}`);
+      toast.success(`${isOwner ? "Car Owner" : "Car Driver"} deleted successfully`);
+      navigate(isOwner ? "/owners" : "/agents");
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to delete");
+      setDeleting(false);
+    }
+  };
 
   const openPay = (e) => {
     setPayEntry(e);
@@ -75,7 +94,23 @@ export default function EntityLedgerPage({ type }) {
   const balance = Number(entity.total_owed) - Number(entity.total_paid);
 
   return (
-    <AppLayout title={entity.name} subtitle={isOwner ? "Car owner payout statement & dues" : "Car driver payout statement & dues"}>
+    <AppLayout
+      title={entity.name}
+      subtitle={isOwner ? "Car owner payout statement & dues" : "Car driver payout statement & dues"}
+      actions={
+        canWrite && (
+          <Button
+            variant="outline"
+            onClick={() => setDelOpen(true)}
+            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-semibold text-xs h-9 shadow-xs cursor-pointer"
+            data-testid="delete-entity-header-button"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1 text-red-500" />
+            Delete {isOwner ? "Owner" : "Driver"}
+          </Button>
+        )
+      }
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="bg-white border border-[#C3E7F1] rounded-xl p-6 lg:col-span-1 shadow-xs">
           <div className="w-14 h-14 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center">
@@ -244,6 +279,7 @@ export default function EntityLedgerPage({ type }) {
         </div>
       </div>
 
+      {/* Payment Settlement Dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
@@ -263,6 +299,43 @@ export default function EntityLedgerPage({ type }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
             <Button onClick={submitPay} className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold">Confirm Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={delOpen} onOpenChange={setDelOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-md p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 text-lg font-bold">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              Delete {isOwner ? "Car Owner" : "Car Driver"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3 text-sm text-slate-600 space-y-2.5">
+            <p>
+              Are you sure you want to permanently delete <strong>{entity?.name}</strong>?
+            </p>
+            {isOwner && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+                ⚠️ <strong>Note:</strong> All cars registered under this owner ({entity?.cars?.length || 0} vehicle{entity?.cars?.length === 1 ? "" : "s"}) will also be removed from the fleet.
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDelOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={deleteEntity}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer"
+              data-testid="confirm-delete-detail-button"
+            >
+              {deleting ? "Deleting…" : `Yes, Delete ${isOwner ? "Owner" : "Driver"}`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

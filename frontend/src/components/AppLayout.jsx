@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -9,12 +9,19 @@ import {
   Plane,
   Wallet,
   MoreHorizontal,
+  LogOut,
 } from "lucide-react";
 
 export default function AppLayout({ children, title, subtitle, actions }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const isSuperAdmin = user?.role === "super_admin";
+
+  const handleSignOut = async () => {
+    await logout();
+    navigate("/login");
+  };
 
   return (
     <div className="min-h-screen bg-[#F4FAFC] flex flex-col selection:bg-[#FFC64F]/30 selection:text-[#20373B]">
@@ -64,12 +71,22 @@ export default function AppLayout({ children, title, subtitle, actions }) {
               </div>
             </div>
 
-            {/* Right: Header Actions */}
-            {actions && (
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {actions}
-              </div>
-            )}
+            {/* Right: Header Actions + Sign Out */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {actions}
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-red-700 bg-[#F4FAFC] hover:bg-red-50 border border-[#C3E7F1] hover:border-red-200 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title={`Sign out (${user.name})`}
+                  data-testid="header-signout-button"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                  <span className="hidden sm:inline">Sign out</span>
+                </button>
+              )}
+            </div>
           </div>
           
           {/* Subtitle bar on extra-small screens */}

@@ -1,4 +1,4 @@
-"""Auth routes."""
+import asyncio
 from fastapi import APIRouter, Response, HTTPException, Depends
 from datetime import datetime, timezone
 from models import LoginIn
@@ -7,12 +7,14 @@ from deps import get_db, get_current_user, log_activity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days session
+
 
 def _set_cookies(response: Response, access: str, refresh: str):
     response.set_cookie(key="access_token", value=access, httponly=True,
-                        secure=False, samesite="lax", max_age=60 * 60 * 12, path="/")
+                        secure=False, samesite="lax", max_age=COOKIE_MAX_AGE, path="/")
     response.set_cookie(key="refresh_token", value=refresh, httponly=True,
-                        secure=False, samesite="lax", max_age=60 * 60 * 24 * 7, path="/")
+                        secure=False, samesite="lax", max_age=COOKIE_MAX_AGE, path="/")
 
 
 @router.post("/login")
@@ -20,7 +22,11 @@ async def login(payload: LoginIn, response: Response):
     db = get_db()
     email = payload.email.lower().strip()
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    is_valid = await asyncio.to_thread(verify_password, payload.password, user["password_hash"])
+    if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access = create_access_token(user["id"], user["email"], user["role"])

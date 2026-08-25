@@ -57,8 +57,10 @@ async def delete_owner(owner_id: str, user: dict = Depends(require_super_admin))
     res = await db.car_owners.delete_one({"id": owner_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Owner not found")
+    # Also delete associated cars belonging to this owner
+    await db.cars.delete_many({"owner_id": owner_id})
     await log_activity(db, user, "delete", "car_owners", owner_id, {})
-    return {"ok": True}
+    return {"ok": True, "message": "Owner and associated fleet cars deleted successfully"}
 
 
 # ---------- Cars ----------

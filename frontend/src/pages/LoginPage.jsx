@@ -42,6 +42,24 @@ export default function LoginPage() {
     }
   };
 
+  const quickLogin = async (quickEmail, quickPassword) => {
+    setEmail(quickEmail);
+    setPassword(quickPassword);
+    setErr("");
+    setBusy(true);
+    try {
+      await login(quickEmail, quickPassword);
+      toast.success("Welcome back");
+      navigate("/");
+    } catch (e) {
+      const msg = formatApiError(e.response?.data?.detail) || e.message;
+      setErr(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Left panel */}
@@ -83,9 +101,9 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel */}
-      <div className="flex items-center justify-center p-8 bg-[#F4FAFC]">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg border border-[#C3E7F1]">
-          <div className="lg:hidden flex items-center gap-2 mb-8">
+      <div className="flex items-center justify-center p-6 sm:p-8 bg-[#F4FAFC]">
+        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-[#C3E7F1]">
+          <div className="lg:hidden flex items-center gap-2 mb-6">
             <div className="w-10 h-10 rounded-md bg-[#FFC64F] flex items-center justify-center shadow-md">
               <Car className="w-5 h-5 text-[#20373B]" strokeWidth={2.25} />
             </div>
@@ -95,21 +113,59 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="mb-8">
-            <div className="text-[#519CAB] uppercase text-[11px] tracking-widest font-bold mb-2">
+          <div className="mb-6">
+            <div className="text-[#519CAB] uppercase text-[11px] tracking-widest font-bold mb-1">
               Sign in
             </div>
-            <h1 className="font-display text-3xl font-extrabold text-[#20373B] tracking-tight">
+            <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[#20373B] tracking-tight">
               Welcome back
             </h1>
-            <p className="text-sm text-slate-500 mt-2">
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
               Use your Car Castle Goa credentials to continue.
             </p>
           </div>
 
+          {/* ⚡ 1-Click Fast Login Quick Access */}
+          <div className="mb-5 p-3.5 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#20373B] mb-2 flex items-center gap-1.5">
+              <span>⚡ Fast 1-Click Login</span>
+              <span className="text-[9px] font-normal text-slate-500 bg-white border border-[#C3E7F1] px-1.5 py-0.2 rounded">Instant Access</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => quickLogin("admin@carcastlegoa.com", "admin123")}
+                className="px-3 py-2 rounded-lg bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] text-xs font-bold text-left transition-all active:scale-98 shadow-xs flex flex-col justify-center cursor-pointer disabled:opacity-50"
+                data-testid="fast-login-admin"
+              >
+                <span>🔑 Admin Dashboard</span>
+                <span className="text-[10px] text-[#C3E7F1] font-normal">Super Admin role</span>
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => quickLogin("operator1@carcastlegoa.com", "operator123")}
+                className="px-3 py-2 rounded-lg bg-white hover:bg-[#C3E7F1]/30 text-[#20373B] border border-[#C3E7F1] text-xs font-bold text-left transition-all active:scale-98 shadow-xs flex flex-col justify-center cursor-pointer disabled:opacity-50"
+                data-testid="fast-login-operator"
+              >
+                <span>🚗 Operator Login</span>
+                <span className="text-[10px] text-slate-500 font-normal">Driver & Ops role</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="relative flex items-center justify-center my-4">
+            <div className="border-t border-[#C3E7F1] w-full" />
+            <span className="bg-white px-3 text-[11px] uppercase tracking-wider font-semibold text-slate-400 shrink-0">
+              or enter manually
+            </span>
+            <div className="border-t border-[#C3E7F1] w-full" />
+          </div>
+
           <form onSubmit={submit} className="space-y-4" data-testid="login-form">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-[#20373B] font-medium">Email</Label>
+              <Label htmlFor="email" className="text-[#20373B] font-medium text-xs sm:text-sm">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -118,12 +174,12 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@carcastlegoa.com"
-                className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB]"
+                className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB] h-10 text-sm"
                 data-testid="login-email-input"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-[#20373B] font-medium">Password</Label>
+              <Label htmlFor="password" className="text-[#20373B] font-medium text-xs sm:text-sm">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -133,7 +189,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB] pr-10"
+                  className="border-[#C3E7F1] focus:border-[#519CAB] focus:ring-[#519CAB] pr-10 h-10 text-sm"
                   data-testid="login-password-input"
                 />
                 <button
@@ -149,7 +205,7 @@ export default function LoginPage() {
 
             {err && (
               <div
-                className="text-sm bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md font-medium"
+                className="text-xs sm:text-sm bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md font-medium"
                 data-testid="login-error"
               >
                 {err}
@@ -159,7 +215,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={busy}
-              className="w-full bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] h-11 text-[15px] font-bold shadow-md transition-all"
+              className="w-full bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] h-10 sm:h-11 text-sm sm:text-[15px] font-bold shadow-md transition-all cursor-pointer"
               data-testid="login-submit-button"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin text-[#FFC64F]" /> : "Sign in"}

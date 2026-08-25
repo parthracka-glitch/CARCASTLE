@@ -10,7 +10,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, User, Phone, ArrowRight, Info, Car, Users, CreditCard, HelpCircle, Sparkles } from "lucide-react";
+import { Plus, User, Phone, ArrowRight, Car, Users, HelpCircle, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 /**
@@ -29,6 +29,8 @@ export default function EntitiesPage({ type }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", contact: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     const { data } = await api.get(endpoint);
@@ -47,6 +49,21 @@ export default function EntitiesPage({ type }) {
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || e.message);
     } finally { setSaving(false); }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`${endpoint}/${deleteTarget.id}`);
+      toast.success(`${isOwner ? "Car Owner" : "Car Driver"} "${deleteTarget.name}" deleted successfully`);
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Calculate global summary stats
@@ -195,9 +212,26 @@ export default function EntitiesPage({ type }) {
                 <div className="w-11 h-11 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center group-hover:bg-[#C3E7F1] transition-colors">
                   {isOwner ? <User className="w-5 h-5 text-[#20373B]" /> : <Users className="w-5 h-5 text-[#20373B]" />}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-[#519CAB] font-semibold group-hover:translate-x-1 transition-transform">
-                  <span>View Payouts</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#519CAB]" />
+                <div className="flex items-center gap-2">
+                  {canWrite && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeleteTarget(o);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
+                      title={`Delete ${o.name}`}
+                      data-testid={`delete-${single}-${o.id}`}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </button>
+                  )}
+                  <div className="flex items-center gap-1 text-xs text-[#519CAB] font-semibold group-hover:translate-x-1 transition-transform">
+                    <span>View Payouts</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#519CAB]" />
+                  </div>
                 </div>
               </div>
 
@@ -250,6 +284,43 @@ export default function EntitiesPage({ type }) {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(openState) => !openState && setDeleteTarget(null)}>
+        <DialogContent className="w-[95vw] sm:max-w-md p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 text-lg font-bold">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              Delete {isOwner ? "Car Owner" : "Car Driver"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3 text-sm text-slate-600 space-y-2.5">
+            <p>
+              Are you sure you want to delete <strong>{deleteTarget?.name}</strong> from the database?
+            </p>
+            {isOwner && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+                ⚠️ <strong>Note:</strong> Any cars registered under this owner will also be removed from the fleet.
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer"
+              data-testid="confirm-delete-button"
+            >
+              {deleting ? "Deleting…" : `Yes, Delete ${isOwner ? "Owner" : "Driver"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
