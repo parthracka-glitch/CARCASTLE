@@ -328,36 +328,42 @@ export default function BookingsPage() {
       title="Bookings"
       subtitle={`${rows.length} total · ${filtered.length} shown`}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {!isOp && (
             <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => downloadReport("xlsx")}
-                className="bg-white border-[#C3E7F1] text-emerald-800 hover:bg-emerald-50 text-xs font-semibold h-9"
+                className="bg-white border-[#C3E7F1] text-emerald-800 hover:bg-emerald-50 text-[11px] sm:text-xs font-semibold h-8 sm:h-9 px-2 sm:px-3 shadow-xs"
                 title="Download live Excel master"
               >
-                <Table2 className="w-4 h-4 mr-1.5 text-emerald-600" /> Export Excel
+                <Table2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-emerald-600 shrink-0" />
+                <span className="hidden sm:inline">Export Excel</span>
+                <span className="sm:hidden">Excel</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => downloadReport("pdf")}
-                className="bg-white border-[#C3E7F1] text-red-800 hover:bg-red-50 text-xs font-semibold h-9"
+                className="bg-white border-[#C3E7F1] text-red-800 hover:bg-red-50 text-[11px] sm:text-xs font-semibold h-8 sm:h-9 px-2 sm:px-3 shadow-xs"
                 title="Download live PDF report"
               >
-                <FileText className="w-4 h-4 mr-1.5 text-red-600" /> Export PDF
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 text-red-600 shrink-0" />
+                <span className="hidden sm:inline">Export PDF</span>
+                <span className="sm:hidden">PDF</span>
               </Button>
             </>
           )}
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(empty); } }}>
             <DialogTrigger asChild>
-              <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-md h-9" data-testid="new-booking-button">
-                <Plus className="w-4 h-4 mr-1" /> New booking
+              <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-xs h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs" data-testid="new-booking-button">
+                <Plus className="w-3.5 h-3.5 mr-1 shrink-0" />
+                <span className="hidden sm:inline">New booking</span>
+                <span className="sm:hidden">New</span>
               </Button>
             </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+          <DialogContent className="w-[96vw] sm:max-w-2xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-[#20373B] font-bold text-lg">{editing ? "Edit booking" : "New booking"}</DialogTitle>
             </DialogHeader>
@@ -1144,7 +1150,7 @@ export default function BookingsPage() {
 
       {/* 🚀 Quick Assign Vehicle Plate Modal */}
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-[#20373B] font-bold">Assign Vehicle Plate / Car</DialogTitle>
           </DialogHeader>
@@ -1191,7 +1197,7 @@ export default function BookingsPage() {
 
       {/* Car Handover Intake Dialog */}
       <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#20373B] font-bold text-lg">
               <Fuel className="w-5 h-5 text-amber-600" />

@@ -111,7 +111,7 @@ export default function CarsPage() {
               <Plus className="w-4 h-4 mr-1" /> New car
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+          <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-[#20373B] font-bold text-lg">
                 {editing ? "Edit car" : "Add new car"}

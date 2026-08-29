@@ -36,69 +36,87 @@ export default function AppLayout({ children, title, subtitle, actions }) {
         
         {/* Sticky Responsive Header */}
         <header className="sticky top-0 z-20 backdrop-blur-md bg-white/95 border-b border-[#C3E7F1]/80 shadow-xs">
-          <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="px-3 sm:px-6 lg:px-8 py-2.5 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             
-            {/* Left: Mobile hamburger + Page Title */}
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(true)}
-                className="lg:hidden p-2 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] text-[#20373B] hover:bg-[#C3E7F1]/30 active:scale-95 transition-all shrink-0"
-                aria-label="Open navigation menu"
-                data-testid="mobile-menu-button"
-              >
-                <Menu className="w-5 h-5 text-[#20373B]" />
-              </button>
-
-              <img
-                src="/logo.jpeg"
-                alt="Car Castle Goa Logo"
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover shadow-xs border border-[#C3E7F1] shrink-0 bg-white"
-              />
-
-              <div className="min-w-0">
-                <h1
-                  className="font-display text-base sm:text-2xl font-extrabold tracking-tight text-[#20373B] truncate leading-tight"
-                  data-testid="page-title"
-                >
-                  {title}
-                </h1>
-                {subtitle && (
-                  <p className="text-[11px] sm:text-sm font-medium text-[#519CAB] truncate hidden sm:block">
-                    {subtitle}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Header Actions + Sign Out */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-              {actions}
-              {user && (
+            {/* Top row on mobile / Left on desktop */}
+            <div className="flex items-center justify-between w-full sm:w-auto">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <button
                   type="button"
-                  onClick={handleSignOut}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-red-700 bg-[#F4FAFC] hover:bg-red-50 border border-[#C3E7F1] hover:border-red-200 transition-all cursor-pointer shadow-xs active:scale-95"
-                  title={`Sign out (${user.name})`}
-                  data-testid="header-signout-button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="lg:hidden p-1.5 sm:p-2 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] text-[#20373B] hover:bg-[#C3E7F1]/30 active:scale-95 transition-all shrink-0"
+                  aria-label="Open navigation menu"
+                  data-testid="mobile-menu-button"
                 >
-                  <LogOut className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                  <span className="hidden sm:inline">Sign out</span>
+                  <Menu className="w-5 h-5 text-[#20373B]" />
                 </button>
+
+                <img
+                  src="/logo.jpeg"
+                  alt="Car Castle Goa Logo"
+                  className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl object-cover shadow-xs border border-[#C3E7F1] shrink-0 bg-white"
+                />
+
+                <div className="min-w-0">
+                  <h1
+                    className="font-display text-sm sm:text-2xl font-extrabold tracking-tight text-[#20373B] truncate leading-tight"
+                    data-testid="page-title"
+                  >
+                    {title}
+                  </h1>
+                  {subtitle && (
+                    <p className="text-[11px] sm:text-sm font-medium text-[#519CAB] truncate hidden sm:block">
+                      {subtitle}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Sign Out button */}
+              {user && (
+                <div className="sm:hidden flex items-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="p-1.5 rounded-lg text-slate-600 hover:text-red-700 bg-[#F4FAFC] hover:bg-red-50 border border-[#C3E7F1] transition-all cursor-pointer shadow-xs active:scale-95"
+                    title={`Sign out (${user.name})`}
+                  >
+                    <LogOut className="w-4 h-4 text-red-600" />
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* Actions row: On mobile, flows under title row with clean wrapping */}
+            {actions && (
+              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2.5 w-full sm:w-auto justify-start sm:justify-end py-0.5">
+                {actions}
+                {user && (
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-red-700 bg-[#F4FAFC] hover:bg-red-50 border border-[#C3E7F1] hover:border-red-200 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                    title={`Sign out (${user.name})`}
+                    data-testid="header-signout-button"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                    <span>Sign out</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           
           {/* Subtitle bar on extra-small screens */}
           {subtitle && (
-            <div className="px-3.5 pb-2 text-[11px] font-medium text-[#519CAB] sm:hidden truncate border-t border-[#C3E7F1]/40 pt-1.5">
+            <div className="px-3.5 pb-2 text-[10px] font-medium text-[#519CAB] sm:hidden truncate border-t border-[#C3E7F1]/40 pt-1">
               {subtitle}
             </div>
           )}
         </header>
 
         {/* Page Content with safe padding for mobile bottom bar */}
-        <main className="flex-1 px-3 sm:px-6 lg:px-8 py-3.5 sm:py-6 pb-24 lg:pb-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-28 lg:pb-8 max-w-7xl w-full mx-auto overflow-x-hidden">
           {children}
         </main>
 

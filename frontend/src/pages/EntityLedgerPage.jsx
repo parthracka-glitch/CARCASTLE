@@ -353,15 +353,15 @@ export default function EntityLedgerPage({ type }) {
   const getCategoryBadge = (cat) => {
     switch (cat) {
       case "fuel":
-        return <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200"><Fuel className="w-3 h-3 text-amber-600" /> Fuel</span>;
+        return <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0"><Fuel className="w-3 h-3 text-amber-600" /> Fuel</span>;
       case "wash":
-        return <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200"><Droplets className="w-3 h-3 text-cyan-600" /> Car Wash</span>;
+        return <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 shrink-0"><Droplets className="w-3 h-3 text-cyan-600" /> Wash</span>;
       case "maintenance":
-        return <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200"><Wrench className="w-3 h-3 text-purple-600" /> Maintenance</span>;
+        return <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 shrink-0"><Wrench className="w-3 h-3 text-purple-600" /> Repair</span>;
       case "challan":
-        return <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-800 border border-red-200"><AlertTriangle className="w-3 h-3 text-red-600" /> Challan / Fine</span>;
+        return <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-md bg-red-50 text-red-800 border border-red-200 shrink-0"><AlertTriangle className="w-3 h-3 text-red-600" /> Fine</span>;
       default:
-        return <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200"><FileText className="w-3 h-3 text-slate-500" /> Other</span>;
+        return <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 shrink-0"><FileText className="w-3 h-3 text-slate-500" /> Other</span>;
     }
   };
 
@@ -390,35 +390,38 @@ export default function EntityLedgerPage({ type }) {
       title={entity.name}
       subtitle={isOwner ? "Car owner payout statement, handover charges & monthly dues" : "Car driver payout statement & dues"}
       actions={
-        <div className="flex items-center flex-wrap gap-2">
+        <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
           {canWrite && isOwner && (
             <>
               {(monthlyCars.length > 0 || entity.cars?.length > 0) && (
                 <Button
                   variant="outline"
                   onClick={openPostMonthlyRentModal}
-                  className="border-purple-300 text-purple-800 hover:bg-purple-50 text-xs font-bold h-9 shadow-xs"
+                  className="border-purple-300 text-purple-800 hover:bg-purple-50 text-[11px] sm:text-xs font-bold h-8 sm:h-9 px-2 sm:px-3 shadow-xs"
                 >
-                  <Calendar className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
-                  Post Monthly Rent
+                  <Calendar className="w-3.5 h-3.5 mr-1 text-purple-600 shrink-0" />
+                  <span className="hidden sm:inline">Post Monthly Rent</span>
+                  <span className="sm:hidden">Post Rent</span>
                 </Button>
               )}
               <Button
                 variant="outline"
                 onClick={() => setWhatsAppModalOpen(true)}
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold h-9 shadow-xs"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-[11px] sm:text-xs font-bold h-8 sm:h-9 px-2 sm:px-3 shadow-xs"
                 data-testid="whatsapp-statement-button"
               >
-                <MessageSquare className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                {isMonthlyFilterActive ? "Monthly WhatsApp" : "WhatsApp Statement"}
+                <MessageSquare className="w-3.5 h-3.5 mr-1 text-emerald-600 shrink-0" />
+                <span className="hidden sm:inline">{isMonthlyFilterActive ? "Monthly WhatsApp" : "WhatsApp Statement"}</span>
+                <span className="sm:hidden">WhatsApp</span>
               </Button>
               <Button
                 onClick={() => setExpenseModalOpen(true)}
-                className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-xs h-9 shadow-xs"
+                className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-[11px] sm:text-xs h-8 sm:h-9 px-2 sm:px-3 shadow-xs"
                 data-testid="add-handover-charge-button"
               >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                Add Fuel / Wash Charge
+                <Plus className="w-3.5 h-3.5 mr-1 shrink-0" />
+                <span className="hidden sm:inline">Add Fuel / Wash Charge</span>
+                <span className="sm:hidden">+ Charge</span>
               </Button>
             </>
           )}
@@ -426,11 +429,12 @@ export default function EntityLedgerPage({ type }) {
             <Button
               variant="outline"
               onClick={() => setDelOpen(true)}
-              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-semibold text-xs h-9 shadow-xs cursor-pointer"
+              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-semibold text-[11px] sm:text-xs h-8 sm:h-9 px-2 sm:px-3 shadow-xs cursor-pointer"
               data-testid="delete-entity-header-button"
             >
-              <Trash2 className="w-3.5 h-3.5 mr-1 text-red-500" />
-              Delete {isOwner ? "Owner" : "Driver"}
+              <Trash2 className="w-3.5 h-3.5 mr-1 text-red-500 shrink-0" />
+              <span className="hidden sm:inline">Delete {isOwner ? "Owner" : "Driver"}</span>
+              <span className="sm:hidden">Delete</span>
             </Button>
           )}
         </div>
@@ -438,18 +442,18 @@ export default function EntityLedgerPage({ type }) {
     >
       {/* Month Filter Selector Bar (Car Owners) */}
       {isOwner && (
-        <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-4 mb-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center flex-wrap gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center text-[#20373B] shrink-0">
-              <Calendar className="w-4 h-4" />
+        <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center flex-wrap gap-2 sm:gap-2.5 w-full sm:w-auto">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center text-[#20373B] shrink-0">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Settlement Billing Cycle</div>
-              <div className="text-xs font-semibold text-[#20373B]">Reconcile full-month car rentals & charges:</div>
+            <div className="min-w-0 flex-1 sm:flex-initial">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-500 font-bold">Settlement Period</div>
+              <div className="text-xs font-semibold text-[#20373B] truncate">Billing cycle filter:</div>
             </div>
-            <div className="min-w-[200px]">
+            <div className="w-full sm:w-auto sm:min-w-[200px]">
               <Select value={selectedMonth} onValueChange={(v) => setSelectedMonth(v)}>
-                <SelectTrigger className="h-8 text-xs font-semibold bg-[#F4FAFC] border-[#C3E7F1]">
+                <SelectTrigger className="h-8 text-xs font-semibold bg-[#F4FAFC] border-[#C3E7F1] w-full">
                   <SelectValue placeholder="Select period" />
                 </SelectTrigger>
                 <SelectContent>
@@ -465,15 +469,15 @@ export default function EntityLedgerPage({ type }) {
           </div>
 
           {isMonthlyFilterActive && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-md">
+            <div className="flex items-center justify-between w-full sm:w-auto gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#C3E7F1]/40">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-purple-900 bg-purple-50 border border-purple-200 px-2 sm:px-2.5 py-1 rounded-md truncate">
                 Viewing <strong>{monthOptions.find((m) => m.value === selectedMonth)?.label || selectedMonth}</strong>
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedMonth("all")}
-                className="h-7 text-xs text-slate-500 hover:text-[#20373B]"
+                className="h-7 text-xs text-slate-500 hover:text-[#20373B] shrink-0"
               >
                 <RotateCcw className="w-3 h-3 mr-1" /> Reset
               </Button>
@@ -483,94 +487,107 @@ export default function EntityLedgerPage({ type }) {
       )}
 
       {/* Profile & Summary Metric Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white border border-[#C3E7F1] rounded-xl p-6 lg:col-span-1 shadow-xs">
-          <div className="w-14 h-14 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center">
-            <User className="w-7 h-7 text-[#20373B]" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-6 lg:col-span-1 shadow-xs">
+          <div className="flex items-center gap-3 sm:block">
+            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center shrink-0">
+              <User className="w-5 h-5 sm:w-7 sm:h-7 text-[#20373B]" />
+            </div>
+            <div>
+              <div className="font-display text-base sm:text-xl font-bold text-[#20373B] leading-tight">{entity.name}</div>
+              <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                <Phone className="w-3 h-3" />{entity.contact || "No contact"}
+              </div>
+            </div>
           </div>
-          <div className="mt-4 font-display text-xl font-bold text-[#20373B]">{entity.name}</div>
-          <div className="mt-1 text-sm text-slate-500 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5" />{entity.contact || "No contact"}
-          </div>
+
           {isOwner && entity.cars && (
-            <div className="mt-4 pt-4 border-t border-[#C3E7F1]/60">
-              <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Cars supplied ({entity.cars.length})</div>
-              {entity.cars.length === 0 && <div className="text-sm text-slate-400">None registered yet</div>}
-              {entity.cars.map((c) => (
-                <div key={c.id} className="text-xs py-1 flex justify-between items-center">
-                  <div>
-                    <span className="font-medium text-[#20373B]">{c.model}</span>
-                    {c.billing_type === "monthly" && (
-                      <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-800 border border-purple-200">
-                        Monthly
-                      </span>
-                    )}
+            <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-[#C3E7F1]/60">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-1.5">Cars supplied ({entity.cars.length})</div>
+              {entity.cars.length === 0 && <div className="text-xs text-slate-400">None registered yet</div>}
+              <div className="space-y-1">
+                {entity.cars.map((c) => (
+                  <div key={c.id} className="text-xs py-0.5 flex justify-between items-center">
+                    <div className="truncate mr-2">
+                      <span className="font-medium text-[#20373B]">{c.model}</span>
+                      {c.billing_type === "monthly" && (
+                        <span className="ml-1 text-[9px] font-bold px-1 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                          Mo
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-mono text-[#519CAB] shrink-0">{c.registration_no}</span>
                   </div>
-                  <span className="text-xs font-mono text-[#519CAB]">{c.registration_no}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {/* 4 Metric Cards Grid for Owners */}
+        {/* 4 Metric Cards Grid: Clean 2x2 grid on mobile (<sm) and 4 cols on desktop */}
         {isOwner ? (
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">
-                {isMonthlyFilterActive ? "Monthly Earnings" : "Rental Earnings"}
+          <div className="lg:col-span-2 grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-4 shadow-xs">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-[#20373B]/70 font-bold truncate">
+                {isMonthlyFilterActive ? "Earnings" : "Rental Earnings"}
               </div>
-              <div className="font-display text-xl font-extrabold text-[#20373B] mt-2 font-tabular">{formatInr(totalOwedAmt)}</div>
-              <div className="text-[10px] text-slate-400 mt-1">
-                {isMonthlyFilterActive ? "Retainers + bookings in month" : "Gross payout from bookings & leases"}
+              <div className="font-display text-lg sm:text-xl font-extrabold text-[#20373B] mt-1 sm:mt-2 font-tabular truncate">
+                {formatInr(totalOwedAmt)}
+              </div>
+              <div className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 truncate">
+                {isMonthlyFilterActive ? "Month retainers + bookings" : "Gross bookings & leases"}
               </div>
             </div>
 
-            <div className={`bg-white border rounded-xl p-4 shadow-xs ${unsettledExpAmt > 0 ? "border-amber-300 bg-amber-50/20" : "border-[#C3E7F1]"}`}>
-              <div className="text-[11px] uppercase tracking-widest text-amber-800 font-bold flex items-center gap-1">
-                <Fuel className="w-3 h-3 text-amber-600" /> Fuel & Washes
+            <div className={`bg-white border rounded-xl p-3 sm:p-4 shadow-xs ${unsettledExpAmt > 0 ? "border-amber-300 bg-amber-50/20" : "border-[#C3E7F1]"}`}>
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-amber-800 font-bold flex items-center gap-1 truncate">
+                <Fuel className="w-3 h-3 text-amber-600 shrink-0" /> Fuel & Washes
               </div>
-              <div className="font-display text-xl font-extrabold text-amber-900 mt-2 font-tabular">
+              <div className="font-display text-lg sm:text-xl font-extrabold text-amber-900 mt-1 sm:mt-2 font-tabular truncate">
                 -{formatInr(unsettledExpAmt)}
               </div>
-              <div className="text-[10px] text-amber-700 mt-1">
-                {isMonthlyFilterActive ? "Total month deductions paid by us" : "Paid by us (to be deducted)"}
+              <div className="text-[9px] sm:text-[10px] text-amber-700 mt-0.5 truncate">
+                Paid by us (to deduct)
               </div>
             </div>
 
-            <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">
+            <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-4 shadow-xs">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-[#20373B]/70 font-bold truncate">
                 {isMonthlyFilterActive ? "Month Advances" : "Lifetime Paid"}
               </div>
-              <div className="font-display text-xl font-extrabold text-emerald-600 mt-2 font-tabular">{formatInr(totalPaidAmt)}</div>
-              <div className="text-[10px] text-slate-400 mt-1">
-                {isMonthlyFilterActive ? "Payments settled in this month" : "Total settled payments"}
+              <div className="font-display text-lg sm:text-xl font-extrabold text-emerald-600 mt-1 sm:mt-2 font-tabular truncate">
+                {formatInr(totalPaidAmt)}
+              </div>
+              <div className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 truncate">
+                Settled payments
               </div>
             </div>
 
-            <div className={`bg-white border rounded-xl p-4 shadow-xs ${netDueAmt > 0 ? "border-red-300 bg-red-50/20" : "border-[#C3E7F1]"}`}>
-              <div className="text-[11px] uppercase tracking-widest font-bold text-red-800">
+            <div className={`bg-white border rounded-xl p-3 sm:p-4 shadow-xs ${netDueAmt > 0 ? "border-red-300 bg-red-50/20" : "border-[#C3E7F1]"}`}>
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold text-red-800 truncate">
                 {isMonthlyFilterActive ? "Month-End Due" : "Net Pending Due"}
               </div>
-              <div className={`font-display text-xl font-extrabold mt-2 font-tabular ${netDueAmt > 0 ? "text-red-700" : "text-slate-500"}`}>
+              <div className={`font-display text-lg sm:text-xl font-extrabold mt-1 sm:mt-2 font-tabular truncate ${netDueAmt > 0 ? "text-red-700" : "text-slate-500"}`}>
                 {formatInr(netDueAmt)}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">After fuel/wash deductions</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
+                After fuel/wash deduction
+              </div>
             </div>
           </div>
         ) : (
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Owed</div>
-              <div className="font-display text-2xl font-extrabold text-[#20373B] mt-2 font-tabular">{formatInr(totalOwedAmt)}</div>
+          <div className="lg:col-span-2 grid grid-cols-3 gap-2.5 sm:gap-4">
+            <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-5 shadow-xs">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-[#20373B]/70 font-bold">Owed</div>
+              <div className="font-display text-base sm:text-2xl font-extrabold text-[#20373B] mt-1 sm:mt-2 font-tabular">{formatInr(totalOwedAmt)}</div>
             </div>
-            <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Paid</div>
-              <div className="font-display text-2xl font-extrabold text-emerald-600 mt-2 font-tabular">{formatInr(totalPaidAmt)}</div>
+            <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-5 shadow-xs">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-[#20373B]/70 font-bold">Paid</div>
+              <div className="font-display text-base sm:text-2xl font-extrabold text-emerald-600 mt-1 sm:mt-2 font-tabular">{formatInr(totalPaidAmt)}</div>
             </div>
-            <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 sm:p-5 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Pending Due</div>
-              <div className={`font-display text-2xl font-extrabold mt-2 font-tabular ${netDueAmt > 0 ? "text-red-700" : "text-slate-500"}`}>
+            <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-5 shadow-xs">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-[#20373B]/70 font-bold">Due</div>
+              <div className={`font-display text-base sm:text-2xl font-extrabold mt-1 sm:mt-2 font-tabular ${netDueAmt > 0 ? "text-red-700" : "text-slate-500"}`}>
                 {formatInr(netDueAmt)}
               </div>
             </div>
@@ -580,11 +597,11 @@ export default function EntityLedgerPage({ type }) {
 
       {/* Tabs navigation for Car Owners */}
       {isOwner && (
-        <div className="flex items-center gap-2 mb-4 border-b border-[#C3E7F1] pb-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 mb-4 border-b border-[#C3E7F1] pb-2 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab("payouts")}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "payouts"
                 ? "bg-[#20373B] text-[#FFC64F] shadow-sm"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
@@ -596,14 +613,14 @@ export default function EntityLedgerPage({ type }) {
           <button
             type="button"
             onClick={() => setActiveTab("expenses")}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "expenses"
                 ? "bg-[#20373B] text-[#FFC64F] shadow-sm"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
             <Fuel className="w-3.5 h-3.5 text-amber-500" />
-            <span>Handover Deductions & Fuel/Wash</span>
+            <span>Fuel & Washes</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${unsettledExpAmt > 0 ? "bg-amber-400 text-amber-950 font-bold" : "bg-black/20"}`}>
               {expenses.length}
             </span>
@@ -615,7 +632,7 @@ export default function EntityLedgerPage({ type }) {
       {(!isOwner || activeTab === "payouts") && (
         <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
-            <div className="font-display font-bold text-[#20373B]">
+            <div className="font-display font-bold text-[#20373B] text-sm sm:text-base">
               Payout History & Dues {isMonthlyFilterActive && `(${selectedMonth})`}
             </div>
             <div className="text-xs text-[#519CAB] font-semibold">{displayedEntries.length} records</div>
@@ -627,15 +644,15 @@ export default function EntityLedgerPage({ type }) {
               const bal = Math.max(0, Number(e.amount) - Number(e.amount_paid));
               return (
                 <div key={e.id} className="p-3.5 space-y-2 bg-white" data-testid={`ledger-card-${e.id}`}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-bold text-[#20373B] text-sm">{e.description}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-[#20373B] text-sm leading-snug">{e.description}</div>
                       <div className="text-[11px] text-slate-500 mt-0.5">{formatDate(e.created_at)}</div>
                     </div>
                     <StatusPill status={e.status} />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center p-2 rounded-lg bg-[#F4FAFC] border border-[#C3E7F1]/60 text-xs">
+                  <div className="grid grid-cols-3 gap-1.5 text-center p-2 rounded-lg bg-[#F4FAFC] border border-[#C3E7F1]/60 text-xs">
                     <div>
                       <div className="text-[9px] uppercase tracking-wider text-slate-400">Total Owed</div>
                       <div className="font-bold font-tabular text-[#20373B]">{formatInr(e.amount)}</div>
@@ -749,7 +766,7 @@ export default function EntityLedgerPage({ type }) {
         <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
             <div>
-              <div className="font-display font-bold text-[#20373B] flex items-center gap-2">
+              <div className="font-display font-bold text-[#20373B] text-sm sm:text-base flex items-center gap-2">
                 <Fuel className="w-4 h-4 text-amber-600" />
                 Handover Expenses & Deductions {isMonthlyFilterActive && `(${selectedMonth})`}
               </div>
@@ -768,7 +785,73 @@ export default function EntityLedgerPage({ type }) {
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Expense Cards (<sm) */}
+          <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
+            {expenses.map((exp) => (
+              <div key={exp.id} className="p-3.5 space-y-2 bg-white">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      {getCategoryBadge(exp.category)}
+                      <span className="font-bold text-[#20373B] text-sm font-tabular">{formatInr(exp.amount)}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1 font-medium">
+                      {exp.car_registration ? `${exp.car_model || "Car"} (${exp.car_registration})` : "General / Fleet Vehicle"}
+                    </div>
+                  </div>
+                  <div>
+                    {exp.is_settled ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        <Check className="w-3 h-3 text-emerald-600" /> Settled
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {exp.description && (
+                  <div className="text-xs text-slate-600 bg-[#F4FAFC] p-2 rounded-lg border border-[#C3E7F1]/50 leading-relaxed">
+                    {exp.description}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1 text-xs">
+                  <span className="text-[11px] text-slate-400">{formatDate(exp.date || exp.created_at)}</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSettleExpense(exp, !exp.is_settled)}
+                      className="h-7 text-xs font-semibold text-slate-700 hover:text-[#20373B]"
+                    >
+                      {exp.is_settled ? "Mark Pending" : "Mark Settled"}
+                    </Button>
+                    {canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExpense(exp.id)}
+                        className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                        title="Delete expense"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {expenses.length === 0 && (
+              <div className="p-8 text-center text-slate-500 text-sm">
+                No handover charges recorded for this period.
+              </div>
+            )}
+          </div>
+
+          {/* Desktop & Tablet Table (hidden sm:block) */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
                 <tr>
@@ -852,7 +935,7 @@ export default function EntityLedgerPage({ type }) {
 
       {/* Post Monthly Rent Dialog */}
       <Dialog open={monthlyRentModalOpen} onOpenChange={setMonthlyRentModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-purple-900 font-bold text-lg">
               <Calendar className="w-5 h-5 text-purple-700" />
@@ -936,7 +1019,7 @@ export default function EntityLedgerPage({ type }) {
 
       {/* Add Handover Expense Dialog */}
       <Dialog open={expenseModalOpen} onOpenChange={setExpenseModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#20373B] font-bold text-lg">
               <Fuel className="w-5 h-5 text-amber-600" />
@@ -1040,7 +1123,7 @@ export default function EntityLedgerPage({ type }) {
 
       {/* WhatsApp Statement Generator Dialog */}
       <Dialog open={whatsAppModalOpen} onOpenChange={setWhatsAppModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-lg max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
               <MessageSquare className="w-5 h-5 text-emerald-600" />
@@ -1084,7 +1167,7 @@ export default function EntityLedgerPage({ type }) {
 
       {/* Payment Settlement Dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader><DialogTitle className="text-[#20373B] font-bold">Record Payment Settlement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs text-[#20373B]">
@@ -1113,7 +1196,7 @@ export default function EntityLedgerPage({ type }) {
 
       {/* Delete Confirmation Modal */}
       <Dialog open={delOpen} onOpenChange={setDelOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md p-5 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md p-5 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 text-lg font-bold">
               <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">

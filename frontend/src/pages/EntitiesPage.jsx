@@ -78,11 +78,13 @@ export default function EntitiesPage({ type }) {
       actions={canWrite && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-md" data-testid={`new-${single}-button`}>
-              <Plus className="w-4 h-4 mr-1.5" /> Add New {isOwner ? "Car Owner" : "Car Driver"}
+            <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-xs h-8 sm:h-9 text-[11px] sm:text-xs px-2.5 sm:px-4" data-testid={`new-${single}-button`}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              <span className="hidden sm:inline">Add New {isOwner ? "Car Owner" : "Car Driver"}</span>
+              <span className="sm:hidden">+ New {isOwner ? "Owner" : "Driver"}</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+          <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
                 <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
@@ -295,7 +297,7 @@ export default function EntitiesPage({ type }) {
 
       {/* Delete Confirmation Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(openState) => !openState && setDeleteTarget(null)}>
-        <DialogContent className="w-[95vw] sm:max-w-md p-5 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-md p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 text-lg font-bold">
               <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">

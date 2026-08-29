@@ -123,7 +123,7 @@ export default function DashboardPage() {
         title={`Namaste, ${user.name}`}
         subtitle="Driver schedules, next-day pickups & drops, and assigned fleet bookings."
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 stagger">
           <div className="bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
             <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">
               Active Bookings
@@ -245,7 +245,7 @@ export default function DashboardPage() {
   const s = summary || {};
   return (
     <AppLayout title="Dashboard" subtitle="Overview of customer sales, net earnings, owner dues, and savings.">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 stagger">
         <KpiCard
           icon={CircleDollarSign}
           badge="Total Sales"
