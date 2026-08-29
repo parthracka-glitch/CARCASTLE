@@ -205,6 +205,13 @@ class AssignCarIn(BaseModel):
     owner_name: Optional[str] = None
 
 
+class HandoverIntakeIn(BaseModel):
+    status: Optional[BookingStatus] = "car_received"
+    fuel_amount: Optional[float] = 0.0
+    wash_amount: Optional[float] = 0.0
+    notes: Optional[str] = ""
+
+
 class Booking(BaseModel):
     id: str = Field(default_factory=new_id)
     customer_name: str
@@ -335,3 +342,52 @@ class SettingsUpdate(BaseModel):
     reminder_template_agent: Optional[str] = None
     reminder_template_transfer: Optional[str] = None
     reminder_interval_days: Optional[int] = None
+
+
+# ---------- Owner Handover Expenses & Deductions ----------
+ExpenseCategory = Literal["fuel", "wash", "maintenance", "fastag", "challan", "other"]
+ExpenseSettlementType = Literal["deduct_from_payout", "paid_by_owner"]
+
+
+class OwnerExpenseCreate(BaseModel):
+    owner_id: str
+    car_id: Optional[str] = None
+    booking_id: Optional[str] = None
+    category: ExpenseCategory = "fuel"
+    amount: float
+    description: Optional[str] = ""
+    settlement_type: ExpenseSettlementType = "deduct_from_payout"
+    date: Optional[str] = None
+
+
+class OwnerExpenseUpdate(BaseModel):
+    category: Optional[ExpenseCategory] = None
+    amount: Optional[float] = None
+    description: Optional[str] = None
+    car_id: Optional[str] = None
+    is_settled: Optional[bool] = None
+    settlement_type: Optional[ExpenseSettlementType] = None
+    settled_at: Optional[str] = None
+    settled_note: Optional[str] = None
+
+
+class OwnerExpense(BaseModel):
+    id: str = Field(default_factory=new_id)
+    owner_id: str
+    car_id: Optional[str] = None
+    car_model: Optional[str] = ""
+    car_registration: Optional[str] = ""
+    booking_id: Optional[str] = None
+    category: ExpenseCategory = "fuel"
+    amount: float
+    description: str = ""
+    is_settled: bool = False
+    settlement_type: ExpenseSettlementType = "deduct_from_payout"
+    settled_at: Optional[str] = None
+    settled_note: Optional[str] = ""
+    settled_in_ledger_id: Optional[str] = None
+    date: str = Field(default_factory=now_iso)
+    created_by: Optional[str] = ""
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+

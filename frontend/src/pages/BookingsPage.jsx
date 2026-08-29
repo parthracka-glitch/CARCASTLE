@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download } from "lucide-react";
+import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download, Fuel, Droplets } from "lucide-react";
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
@@ -58,6 +58,12 @@ export default function BookingsPage() {
   const [assignPlateInput, setAssignPlateInput] = useState("");
   const [assignCarModelInput, setAssignCarModelInput] = useState("");
   const [assigningPlate, setAssigningPlate] = useState(false);
+
+  // Handover intake modal state (fuel & wash charges)
+  const [intakeModalOpen, setIntakeModalOpen] = useState(false);
+  const [intakeBooking, setIntakeBooking] = useState(null);
+  const [intakeForm, setIntakeForm] = useState({ fuel_amount: "", wash_amount: "", notes: "" });
+  const [savingIntake, setSavingIntake] = useState(false);
 
   const load = async () => {
     const [r, c, a, o] = await Promise.all([
@@ -233,12 +239,44 @@ export default function BookingsPage() {
   };
 
   const updateStatus = async (b, s) => {
+    if (s === "car_received") {
+      setIntakeBooking(b);
+      setIntakeForm({ fuel_amount: "", wash_amount: "", notes: "" });
+      setIntakeModalOpen(true);
+      return;
+    }
     try {
       await api.put(`/bookings/${b.id}`, { status: s });
       toast.success(`Status → ${s.replace("_", " ")}`);
       await load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail));
+    }
+  };
+
+  const submitHandoverIntake = async (skipCharges = false) => {
+    if (!intakeBooking) return;
+    setSavingIntake(true);
+    try {
+      const payload = {
+        status: "car_received",
+        fuel_amount: skipCharges ? 0 : Number(intakeForm.fuel_amount || 0),
+        wash_amount: skipCharges ? 0 : Number(intakeForm.wash_amount || 0),
+        notes: skipCharges ? "" : intakeForm.notes,
+      };
+      await api.post(`/bookings/${intakeBooking.id}/handover-intake`, payload);
+      if (!skipCharges && (payload.fuel_amount > 0 || payload.wash_amount > 0)) {
+        toast.success("Car received & handover charges recorded against owner");
+      } else {
+        toast.success("Status updated to Car received");
+      }
+      setIntakeModalOpen(false);
+      setIntakeBooking(null);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to update intake");
+    } finally {
+      setSavingIntake(false);
     }
   };
 
@@ -1146,6 +1184,71 @@ export default function BookingsPage() {
               className="bg-[#20373B] text-[#FFC64F] font-bold hover:bg-[#2C494E]"
             >
               {assigningPlate ? "Saving..." : "Save Plate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Car Handover Intake Dialog */}
+      <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#20373B] font-bold text-lg">
+              <Fuel className="w-5 h-5 text-amber-600" />
+              Car Handover Intake ({intakeBooking?.car_registration || "Vehicle"})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-lg text-amber-950 leading-relaxed">
+              Taking vehicle <strong>{intakeBooking?.car_model}</strong> ({intakeBooking?.car_registration}) from <strong>{intakeBooking?.owner_name || "Car Owner"}</strong>.
+              <br />
+              Did you pay any <strong>extra fuel</strong> or <strong>car washing</strong> charges out-of-pocket?
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Extra Fuel Paid by You (₹)</Label>
+              <Input
+                type="number"
+                value={intakeForm.fuel_amount}
+                onChange={(e) => setIntakeForm({ ...intakeForm, fuel_amount: e.target.value })}
+                placeholder="0 (e.g. 500)"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Washing / Cleaning Paid by You (₹)</Label>
+              <Input
+                type="number"
+                value={intakeForm.wash_amount}
+                onChange={(e) => setIntakeForm({ ...intakeForm, wash_amount: e.target.value })}
+                placeholder="0 (e.g. 300)"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Notes / Receipt Reason (Optional)</Label>
+              <Input
+                value={intakeForm.notes}
+                onChange={(e) => setIntakeForm({ ...intakeForm, notes: e.target.value })}
+                placeholder="e.g. Low fuel at delivery, foam washed at Calangute"
+                className="h-9"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => submitHandoverIntake(true)}
+              disabled={savingIntake}
+              className="text-slate-600 border-slate-300 hover:bg-slate-50 text-xs font-semibold"
+            >
+              No Extra Charges (Skip)
+            </Button>
+            <Button
+              onClick={() => submitHandoverIntake(false)}
+              disabled={savingIntake}
+              className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-xs"
+            >
+              {savingIntake ? "Saving…" : "Save Charges & Receive Car"}
             </Button>
           </DialogFooter>
         </DialogContent>

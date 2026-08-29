@@ -200,7 +200,9 @@ export default function EntitiesPage({ type }) {
       {/* Grid of Entity Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger" data-testid={`${single}-grid`}>
         {rows.map((o) => {
-          const balance = Number(o.total_owed || 0) - Number(o.total_paid || 0);
+          const balance = o.net_balance !== undefined
+            ? Number(o.net_balance)
+            : Math.max(0, Number(o.total_owed || 0) - Number(o.total_paid || 0));
           return (
             <Link
               key={o.id}
@@ -239,6 +241,12 @@ export default function EntitiesPage({ type }) {
               <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
                 <Phone className="w-3 h-3 text-slate-400" /> {o.contact || "No contact provided"}
               </div>
+
+              {isOwner && Number(o.unsettled_expenses || 0) > 0 && (
+                <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                  ⛽ -{formatInr(o.unsettled_expenses)} handover deductions
+                </div>
+              )}
 
               {canWrite && (
                 <div className="mt-4 pt-4 border-t border-[#C3E7F1]/60 grid grid-cols-3 gap-2 text-center bg-[#F4FAFC] -mx-5 -mb-5 p-4 rounded-b-xl">

@@ -2,7 +2,15 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from models import BookingCreate, BookingUpdate, AssignCarIn, new_id, now_iso, calculate_9am_days
+from models import (
+    BookingCreate,
+    BookingUpdate,
+    AssignCarIn,
+    HandoverIntakeIn,
+    new_id,
+    now_iso,
+    calculate_9am_days,
+)
 from deps import get_db, get_current_user, require_super_admin, log_activity
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -369,6 +377,99 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
     if user["role"] == "operator":
         b = _sanitize_for_operator(b)
     return b
+
+
+@router.post("/{booking_id}/handover-intake")
+async def record_handover_intake(
+    booking_id: str,
+    payload: HandoverIntakeIn,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Handle car handover intake from the car owner.
+    Updates booking status (default: car_received) and creates owner expenses
+    for any extra fuel or washing charges paid by the operator upon receiving the car.
+    """
+    db = get_db()
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    new_status = payload.status or "car_received"
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"status": new_status, "updated_at": now_iso()}}
+    )
+
+    created_expenses = []
+    owner_id = booking.get("owner_id")
+    car_id = booking.get("car_id")
+    car_model = booking.get("car_model", "")
+    car_registration = booking.get("car_registration", "")
+
+    if owner_id:
+        fuel_amt = float(payload.fuel_amount or 0)
+        wash_amt = float(payload.wash_amount or 0)
+
+        if fuel_amt > 0:
+            fuel_doc = {
+                "id": new_id(),
+                "owner_id": owner_id,
+                "car_id": car_id,
+                "car_model": car_model,
+                "car_registration": car_registration,
+                "booking_id": booking_id,
+                "category": "fuel",
+                "amount": fuel_amt,
+                "description": f"Extra fuel at intake (Booking #{booking_id[:8]})" + (f" — {payload.notes}" if payload.notes else ""),
+                "is_settled": False,
+                "settlement_type": "deduct_from_payout",
+                "settled_at": None,
+                "settled_note": "",
+                "settled_in_ledger_id": None,
+                "date": now_iso(),
+                "created_by": user.get("email", ""),
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            }
+            await db.owner_expenses.insert_one(fuel_doc)
+            fuel_doc.pop("_id", None)
+            created_expenses.append(fuel_doc)
+
+        if wash_amt > 0:
+            wash_doc = {
+                "id": new_id(),
+                "owner_id": owner_id,
+                "car_id": car_id,
+                "car_model": car_model,
+                "car_registration": car_registration,
+                "booking_id": booking_id,
+                "category": "wash",
+                "amount": wash_amt,
+                "description": f"Car wash at intake (Booking #{booking_id[:8]})" + (f" — {payload.notes}" if payload.notes else ""),
+                "is_settled": False,
+                "settlement_type": "deduct_from_payout",
+                "settled_at": None,
+                "settled_note": "",
+                "settled_in_ledger_id": None,
+                "date": now_iso(),
+                "created_by": user.get("email", ""),
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            }
+            await db.owner_expenses.insert_one(wash_doc)
+            wash_doc.pop("_id", None)
+            created_expenses.append(wash_doc)
+
+    await log_activity(
+        db, user, "handover_intake", "bookings", booking_id,
+        {"status": new_status, "expenses_created": len(created_expenses)}
+    )
+
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if user["role"] == "operator":
+        b = _sanitize_for_operator(b)
+    return {"booking": b, "expenses": created_expenses}
 
 
 @router.delete("/{booking_id}")

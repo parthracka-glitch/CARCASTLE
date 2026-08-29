@@ -12,6 +12,15 @@ router = APIRouter(tags=["entities"])
 async def list_owners(user: dict = Depends(get_current_user)):
     db = get_db()
     docs = await db.car_owners.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Compute unsettled handover deductions for each owner
+    unsettled_list = await db.owner_expenses.find({"is_settled": False}, {"_id": 0}).to_list(2000)
+    exp_map = {}
+    for exp in unsettled_list:
+        oid = exp.get("owner_id")
+        exp_map[oid] = exp_map.get(oid, 0.0) + float(exp.get("amount", 0))
+    for d in docs:
+        d["unsettled_expenses"] = exp_map.get(d["id"], 0.0)
+        d["net_balance"] = max(0.0, float(d.get("total_owed", 0)) - d["unsettled_expenses"] - float(d.get("total_paid", 0)))
     return docs
 
 
@@ -34,8 +43,14 @@ async def get_owner(owner_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(404, "Owner not found")
     cars = await db.cars.find({"owner_id": owner_id}, {"_id": 0}).to_list(200)
     bookings_count = await db.bookings.count_documents({"owner_id": owner_id})
+    unsettled_expenses = sum(
+        float(e.get("amount", 0))
+        for e in await db.owner_expenses.find({"owner_id": owner_id, "is_settled": False}).to_list(500)
+    )
     owner["cars"] = cars
     owner["bookings_count"] = bookings_count
+    owner["unsettled_expenses"] = unsettled_expenses
+    owner["net_balance"] = max(0.0, float(owner.get("total_owed", 0)) - unsettled_expenses - float(owner.get("total_paid", 0)))
     return owner
 
 
