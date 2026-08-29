@@ -62,11 +62,17 @@ class Agent(BaseModel):
 
 
 # ---------- Cars ----------
+CarBillingType = Literal["daily", "monthly"]
+
+
 class CarCreate(BaseModel):
     registration_no: str
     model: str
     owner_id: str
     default_cost_rate: Optional[float] = 0.0
+    billing_type: Optional[CarBillingType] = "daily"
+    monthly_cost_rate: Optional[float] = 0.0
+    billing_cycle_day: Optional[int] = 1
 
 
 class Car(BaseModel):
@@ -75,6 +81,9 @@ class Car(BaseModel):
     model: str
     owner_id: str
     default_cost_rate: float = 0.0
+    billing_type: CarBillingType = "daily"
+    monthly_cost_rate: float = 0.0
+    billing_cycle_day: int = 1
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -390,4 +399,12 @@ class OwnerExpense(BaseModel):
     created_by: Optional[str] = ""
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
+
+
+class MonthlyRetainerPost(BaseModel):
+    car_id: str
+    month: str  # YYYY-MM
+    amount: float
+    notes: Optional[str] = ""
+
 

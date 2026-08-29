@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Bell, IndianRupee, Loader2, User, Phone, CheckCircle2, Trash2,
   Fuel, Droplets, Plus, MessageSquare, Copy, ExternalLink, Check,
-  Wrench, AlertTriangle, FileText
+  Wrench, AlertTriangle, FileText, Calendar, RotateCcw
 } from "lucide-react";
 
 export default function EntityLedgerPage({ type }) {
@@ -32,6 +32,9 @@ export default function EntityLedgerPage({ type }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("payouts"); // 'payouts' | 'expenses'
+
+  // Month filter (e.g. "all" or "2026-08")
+  const [selectedMonth, setSelectedMonth] = useState("all");
 
   // Payment dialog
   const [payOpen, setPayOpen] = useState(false);
@@ -54,18 +57,44 @@ export default function EntityLedgerPage({ type }) {
   });
   const [savingExpense, setSavingExpense] = useState(false);
 
+  // Monthly Retainer / Lease dialog
+  const [monthlyRentModalOpen, setMonthlyRentModalOpen] = useState(false);
+  const [monthlyRentForm, setMonthlyRentForm] = useState({
+    car_id: "",
+    month: new Date().toISOString().slice(0, 7),
+    amount: "",
+    notes: "",
+  });
+  const [postingMonthlyRent, setPostingMonthlyRent] = useState(false);
+
   // WhatsApp statement dialog
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const getMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+      options.push({ value, label: i === 0 ? `${label} (Current)` : label });
+    }
+    return options;
+  };
+  const monthOptions = getMonthOptions();
+
   const load = async () => {
     try {
       if (isOwner) {
+        const expParams = selectedMonth !== "all" ? { month: selectedMonth } : {};
+        const sumParams = selectedMonth !== "all" ? { month: selectedMonth } : {};
+
         const [e, l, exp, sum] = await Promise.all([
           api.get(`/owners/${id}`),
           api.get("/ledger", { params: { entity_type: type, entity_id: id } }),
-          api.get(`/owners/${id}/expenses`),
-          api.get(`/owners/${id}/settlement-summary`),
+          api.get(`/owners/${id}/expenses`, { params: expParams }),
+          api.get(`/owners/${id}/settlement-summary`, { params: sumParams }),
         ]);
         setEntity(e.data);
         setEntries(l.data);
@@ -89,7 +118,7 @@ export default function EntityLedgerPage({ type }) {
     }
   };
 
-  useEffect(() => { load(); }, [id]); // eslint-disable-line
+  useEffect(() => { load(); }, [id, selectedMonth]); // eslint-disable-line
 
   const deleteEntity = async () => {
     setDeleting(true);
@@ -193,45 +222,112 @@ export default function EntityLedgerPage({ type }) {
     }
   };
 
+  // Monthly Retainer Open & Post
+  const monthlyCars = (entity?.cars || []).filter((c) => c.billing_type === "monthly");
+
+  const openPostMonthlyRentModal = () => {
+    const firstCar = monthlyCars[0] || entity?.cars?.[0];
+    const currMonth = selectedMonth !== "all" ? selectedMonth : new Date().toISOString().slice(0, 7);
+    setMonthlyRentForm({
+      car_id: firstCar?.id || "",
+      month: currMonth,
+      amount: String(firstCar?.monthly_cost_rate || ""),
+      notes: "Fixed monthly retainer",
+    });
+    setMonthlyRentModalOpen(true);
+  };
+
+  const handlePostMonthlyRent = async () => {
+    if (!monthlyRentForm.car_id) {
+      toast.error("Please select a vehicle");
+      return;
+    }
+    if (!monthlyRentForm.amount || Number(monthlyRentForm.amount) <= 0) {
+      toast.error("Please enter a valid monthly rent amount");
+      return;
+    }
+    setPostingMonthlyRent(true);
+    try {
+      await api.post(`/owners/${id}/post-monthly-rent`, {
+        car_id: monthlyRentForm.car_id,
+        month: monthlyRentForm.month,
+        amount: Number(monthlyRentForm.amount),
+        notes: monthlyRentForm.notes,
+      });
+      toast.success(`Monthly rent for ${monthlyRentForm.month} posted to statement!`);
+      setMonthlyRentModalOpen(false);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Failed to post monthly rent");
+    } finally {
+      setPostingMonthlyRent(false);
+    }
+  };
+
   // Build WhatsApp Statement Text
   const buildWhatsAppText = () => {
     if (!entity) return "";
+    const isMonthlyView = selectedMonth !== "all";
+    const monthLabel = isMonthlyView
+      ? new Date(`${selectedMonth}-01`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
+      : "";
     const today = new Date().toLocaleDateString("en-IN", {
       day: "numeric", month: "short", year: "numeric",
     });
-    const carsList = entity.cars?.map((c) => `🚗 ${c.model} (${c.registration_no})`).join("\n") || "🚗 Vehicle on fleet";
+
+    const carsList = entity.cars?.map((c) => {
+      const typeStr = c.billing_type === "monthly" ? ` [Monthly Lease: ${formatInr(c.monthly_cost_rate)}/mo]` : "";
+      return `🚗 ${c.model} (${c.registration_no})${typeStr}`;
+    }).join("\n") || "🚗 Vehicle on fleet";
+
     const totalOwedAmt = summary ? summary.total_owed : Number(entity.total_owed);
     const totalPaidAmt = summary ? summary.total_paid : Number(entity.total_paid);
     const unsettledExp = summary ? summary.unsettled_expenses : 0;
     const netDue = summary ? summary.net_balance_due : (totalOwedAmt - totalPaidAmt);
 
-    let text = `🌴 *CAR CASTLE GOA — OWNER SETTLEMENT STATEMENT*\n`;
-    text += `📅 Date: ${today}\n`;
+    let text = isMonthlyView
+      ? `🌴 *CAR CASTLE GOA — MONTHLY SETTLEMENT STATEMENT*\n`
+      : `🌴 *CAR CASTLE GOA — OWNER SETTLEMENT STATEMENT*\n`;
+
+    if (isMonthlyView) {
+      text += `📅 *Billing Month:* ${monthLabel}\n`;
+      text += `🗓️ Statement Generated: ${today}\n`;
+    } else {
+      text += `📅 Date: ${today}\n`;
+    }
     text += `👤 Car Owner: ${entity.name}\n`;
     text += `📞 Contact: ${entity.contact || "—"}\n\n`;
     text += `*Assigned Vehicles:*\n${carsList}\n\n`;
-    text += `💰 *Rental Earnings (Gross Payout):*\n`;
-    text += `• Total Accumulated: ${formatInr(totalOwedAmt)}\n\n`;
+
+    text += isMonthlyView
+      ? `💰 *Monthly Retainers & Rental Earnings (${monthLabel}):*\n`
+      : `💰 *Rental Earnings (Gross Payout):*\n`;
+    text += `• Total Retainers & Earnings: ${formatInr(totalOwedAmt)}\n\n`;
 
     if (unsettledExp > 0 && summary?.unsettled_items?.length) {
-      text += `⛽ *Handover Charges & Deductions Paid by Us:*\n`;
+      text += isMonthlyView
+        ? `⛽ *Handover Charges & Deductions for ${monthLabel}:*\n`
+        : `⛽ *Handover Charges & Deductions Paid by Us:*\n`;
       summary.unsettled_items.forEach((item) => {
         const catIcon = item.category === "fuel" ? "⛽ Fuel" : item.category === "wash" ? "🧼 Wash" : "🔧 Charge";
         const carStr = item.car_registration ? ` (${item.car_registration})` : "";
-        text += `• ${catIcon}${carStr}: -${formatInr(item.amount)} ${item.description ? `(${item.description})` : ""}\n`;
+        const dateStr = item.date ? ` [${new Date(item.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}]` : "";
+        text += `• ${catIcon}${carStr}${dateStr}: -${formatInr(item.amount)} ${item.description ? `(${item.description})` : ""}\n`;
       });
-      text += `• *Total Handover Deductions:* -${formatInr(unsettledExp)}\n\n`;
+      text += `• *Total Deductions:* -${formatInr(unsettledExp)}\n\n`;
     }
 
-    text += `📊 *Settlement Summary:*\n`;
-    text += `• Gross Rental Owed: ${formatInr(totalOwedAmt)}\n`;
+    text += `📊 *${isMonthlyView ? `${monthLabel} Settlement Breakdown` : "Settlement Summary"}:*\n`;
+    text += `• Gross Rental / Retainer: ${formatInr(totalOwedAmt)}\n`;
     if (unsettledExp > 0) {
       text += `• Less Deductions: -${formatInr(unsettledExp)}\n`;
       text += `• Net Payout Amount: ${formatInr(totalOwedAmt - unsettledExp)}\n`;
     }
-    text += `• Amount Paid to Date: ${formatInr(totalPaidAmt)}\n`;
+    text += isMonthlyView
+      ? `• Advance Payments Paid in Month: ${formatInr(totalPaidAmt)}\n`
+      : `• Amount Paid to Date: ${formatInr(totalPaidAmt)}\n`;
     text += `------------------------------------\n`;
-    text += `*Pending Balance Due: ${formatInr(netDue)}*\n\n`;
+    text += `*${isMonthlyView ? `Remaining Month-End Due: ` : `Pending Balance Due: `}${formatInr(netDue)}*\n\n`;
     text += `Thank you for partnering with Car Castle Goa! For any queries or settlement updates, please contact us. 🚗✨`;
     return text;
   };
@@ -282,14 +378,31 @@ export default function EntityLedgerPage({ type }) {
   const unsettledExpAmt = summary ? summary.unsettled_expenses : 0;
   const netDueAmt = summary ? summary.net_balance_due : Math.max(0, totalOwedAmt - totalPaidAmt);
 
+  // Filter entries if month is selected
+  const displayedEntries = selectedMonth === "all"
+    ? entries
+    : entries.filter((ent) => (ent.created_at || ent.due_date || "").startsWith(selectedMonth));
+
+  const isMonthlyFilterActive = selectedMonth !== "all";
+
   return (
     <AppLayout
       title={entity.name}
-      subtitle={isOwner ? "Car owner payout statement, handover charges & dues" : "Car driver payout statement & dues"}
+      subtitle={isOwner ? "Car owner payout statement, handover charges & monthly dues" : "Car driver payout statement & dues"}
       actions={
         <div className="flex items-center flex-wrap gap-2">
           {canWrite && isOwner && (
             <>
+              {(monthlyCars.length > 0 || entity.cars?.length > 0) && (
+                <Button
+                  variant="outline"
+                  onClick={openPostMonthlyRentModal}
+                  className="border-purple-300 text-purple-800 hover:bg-purple-50 text-xs font-bold h-9 shadow-xs"
+                >
+                  <Calendar className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                  Post Monthly Rent
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setWhatsAppModalOpen(true)}
@@ -297,7 +410,7 @@ export default function EntityLedgerPage({ type }) {
                 data-testid="whatsapp-statement-button"
               >
                 <MessageSquare className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-                WhatsApp Statement
+                {isMonthlyFilterActive ? "Monthly WhatsApp" : "WhatsApp Statement"}
               </Button>
               <Button
                 onClick={() => setExpenseModalOpen(true)}
@@ -323,6 +436,52 @@ export default function EntityLedgerPage({ type }) {
         </div>
       }
     >
+      {/* Month Filter Selector Bar (Car Owners) */}
+      {isOwner && (
+        <div className="bg-white border border-[#C3E7F1] rounded-xl p-3 sm:p-4 mb-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center flex-wrap gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#C3E7F1]/30 border border-[#C3E7F1] flex items-center justify-center text-[#20373B] shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Settlement Billing Cycle</div>
+              <div className="text-xs font-semibold text-[#20373B]">Reconcile full-month car rentals & charges:</div>
+            </div>
+            <div className="min-w-[200px]">
+              <Select value={selectedMonth} onValueChange={(v) => setSelectedMonth(v)}>
+                <SelectTrigger className="h-8 text-xs font-semibold bg-[#F4FAFC] border-[#C3E7F1]">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">🌐 All Time (Cumulative Total)</SelectItem>
+                  {monthOptions.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      📅 {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {isMonthlyFilterActive && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-md">
+                Viewing <strong>{monthOptions.find((m) => m.value === selectedMonth)?.label || selectedMonth}</strong>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedMonth("all")}
+                className="h-7 text-xs text-slate-500 hover:text-[#20373B]"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" /> Reset
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Profile & Summary Metric Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="bg-white border border-[#C3E7F1] rounded-xl p-6 lg:col-span-1 shadow-xs">
@@ -338,8 +497,15 @@ export default function EntityLedgerPage({ type }) {
               <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Cars supplied ({entity.cars.length})</div>
               {entity.cars.length === 0 && <div className="text-sm text-slate-400">None registered yet</div>}
               {entity.cars.map((c) => (
-                <div key={c.id} className="text-sm py-1 flex justify-between">
-                  <span className="font-medium text-[#20373B]">{c.model}</span>
+                <div key={c.id} className="text-xs py-1 flex justify-between items-center">
+                  <div>
+                    <span className="font-medium text-[#20373B]">{c.model}</span>
+                    {c.billing_type === "monthly" && (
+                      <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                        Monthly
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs font-mono text-[#519CAB]">{c.registration_no}</span>
                 </div>
               ))}
@@ -351,33 +517,45 @@ export default function EntityLedgerPage({ type }) {
         {isOwner ? (
           <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Rental Earnings</div>
+              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">
+                {isMonthlyFilterActive ? "Monthly Earnings" : "Rental Earnings"}
+              </div>
               <div className="font-display text-xl font-extrabold text-[#20373B] mt-2 font-tabular">{formatInr(totalOwedAmt)}</div>
-              <div className="text-[10px] text-slate-400 mt-1">Gross payout from bookings</div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                {isMonthlyFilterActive ? "Retainers + bookings in month" : "Gross payout from bookings & leases"}
+              </div>
             </div>
 
             <div className={`bg-white border rounded-xl p-4 shadow-xs ${unsettledExpAmt > 0 ? "border-amber-300 bg-amber-50/20" : "border-[#C3E7F1]"}`}>
               <div className="text-[11px] uppercase tracking-widest text-amber-800 font-bold flex items-center gap-1">
-                <Fuel className="w-3 h-3 text-amber-600" /> Fuel & Wash Deductions
+                <Fuel className="w-3 h-3 text-amber-600" /> Fuel & Washes
               </div>
               <div className="font-display text-xl font-extrabold text-amber-900 mt-2 font-tabular">
                 -{formatInr(unsettledExpAmt)}
               </div>
-              <div className="text-[10px] text-amber-700 mt-1">Paid by us (to be deducted)</div>
+              <div className="text-[10px] text-amber-700 mt-1">
+                {isMonthlyFilterActive ? "Total month deductions paid by us" : "Paid by us (to be deducted)"}
+              </div>
             </div>
 
             <div className="bg-white border border-[#C3E7F1] rounded-xl p-4 shadow-xs">
-              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">Lifetime Paid</div>
+              <div className="text-[11px] uppercase tracking-widest text-[#20373B]/70 font-bold">
+                {isMonthlyFilterActive ? "Month Advances" : "Lifetime Paid"}
+              </div>
               <div className="font-display text-xl font-extrabold text-emerald-600 mt-2 font-tabular">{formatInr(totalPaidAmt)}</div>
-              <div className="text-[10px] text-slate-400 mt-1">Total settled payments</div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                {isMonthlyFilterActive ? "Payments settled in this month" : "Total settled payments"}
+              </div>
             </div>
 
             <div className={`bg-white border rounded-xl p-4 shadow-xs ${netDueAmt > 0 ? "border-red-300 bg-red-50/20" : "border-[#C3E7F1]"}`}>
-              <div className="text-[11px] uppercase tracking-widest font-bold text-red-800">Net Pending Due</div>
+              <div className="text-[11px] uppercase tracking-widest font-bold text-red-800">
+                {isMonthlyFilterActive ? "Month-End Due" : "Net Pending Due"}
+              </div>
               <div className={`font-display text-xl font-extrabold mt-2 font-tabular ${netDueAmt > 0 ? "text-red-700" : "text-slate-500"}`}>
                 {formatInr(netDueAmt)}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">After fuel/wash deduction</div>
+              <div className="text-[10px] text-slate-500 mt-1">After fuel/wash deductions</div>
             </div>
           </div>
         ) : (
@@ -413,7 +591,7 @@ export default function EntityLedgerPage({ type }) {
             }`}
           >
             <span>Payout History & Dues</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">{entries.length}</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">{displayedEntries.length}</span>
           </button>
           <button
             type="button"
@@ -437,13 +615,15 @@ export default function EntityLedgerPage({ type }) {
       {(!isOwner || activeTab === "payouts") && (
         <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex items-center justify-between">
-            <div className="font-display font-bold text-[#20373B]">Payout History & Dues</div>
-            <div className="text-xs text-[#519CAB] font-semibold">{entries.length} records</div>
+            <div className="font-display font-bold text-[#20373B]">
+              Payout History & Dues {isMonthlyFilterActive && `(${selectedMonth})`}
+            </div>
+            <div className="text-xs text-[#519CAB] font-semibold">{displayedEntries.length} records</div>
           </div>
 
           {/* Mobile Payout Cards (<sm) */}
           <div className="block sm:hidden divide-y divide-[#C3E7F1]/60">
-            {entries.map((e) => {
+            {displayedEntries.map((e) => {
               const bal = Math.max(0, Number(e.amount) - Number(e.amount_paid));
               return (
                 <div key={e.id} className="p-3.5 space-y-2 bg-white" data-testid={`ledger-card-${e.id}`}>
@@ -499,8 +679,8 @@ export default function EntityLedgerPage({ type }) {
                 </div>
               );
             })}
-            {entries.length === 0 && (
-              <div className="p-8 text-center text-slate-500 text-sm">No payout records yet.</div>
+            {displayedEntries.length === 0 && (
+              <div className="p-8 text-center text-slate-500 text-sm">No payout records in this period.</div>
             )}
           </div>
 
@@ -519,7 +699,7 @@ export default function EntityLedgerPage({ type }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#C3E7F1]/50">
-              {entries.map((e) => {
+              {displayedEntries.map((e) => {
                 const bal = Math.max(0, Number(e.amount) - Number(e.amount_paid));
                 return (
                   <tr key={e.id} className="dense-row hover:bg-[#C3E7F1]/20 transition-colors" data-testid={`ledger-row-${e.id}`}>
@@ -555,8 +735,8 @@ export default function EntityLedgerPage({ type }) {
                   </tr>
                 );
               })}
-              {entries.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No payout records yet.</td></tr>
+              {displayedEntries.length === 0 && (
+                <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No payout records in this period.</td></tr>
               )}
             </tbody>
           </table>
@@ -571,10 +751,10 @@ export default function EntityLedgerPage({ type }) {
             <div>
               <div className="font-display font-bold text-[#20373B] flex items-center gap-2">
                 <Fuel className="w-4 h-4 text-amber-600" />
-                Handover Expenses & Deductions
+                Handover Expenses & Deductions {isMonthlyFilterActive && `(${selectedMonth})`}
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Extra fuel, washing, Fastag, or repairs paid out-of-pocket upon receiving the vehicle
+                Extra fuel, washes, Fastag, or repairs paid out-of-pocket during this period
               </div>
             </div>
             {canWrite && (
@@ -660,7 +840,7 @@ export default function EntityLedgerPage({ type }) {
                 {expenses.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-5 py-10 text-center text-slate-500 text-sm">
-                      No handover charges recorded yet. When you pay fuel or washing upon receiving a car, record it here to track deductions!
+                      No handover charges recorded for this period.
                     </td>
                   </tr>
                 )}
@@ -669,6 +849,90 @@ export default function EntityLedgerPage({ type }) {
           </div>
         </div>
       )}
+
+      {/* Post Monthly Rent Dialog */}
+      <Dialog open={monthlyRentModalOpen} onOpenChange={setMonthlyRentModalOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-900 font-bold text-lg">
+              <Calendar className="w-5 h-5 text-purple-700" />
+              Post Monthly Retainer / Lease
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 text-xs">
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-purple-950 leading-relaxed">
+              📅 <strong>Monthly Contract Rent:</strong> This posts the agreed fixed monthly lease payout to this owner's ledger for the specified billing month.
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Select Leased Vehicle</Label>
+              <Select
+                value={monthlyRentForm.car_id}
+                onValueChange={(v) => {
+                  const selCar = entity?.cars?.find((c) => c.id === v);
+                  setMonthlyRentForm({
+                    ...monthlyRentForm,
+                    car_id: v,
+                    amount: selCar?.monthly_cost_rate ? String(selCar.monthly_cost_rate) : monthlyRentForm.amount,
+                  });
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select car" />
+                </SelectTrigger>
+                <SelectContent>
+                  {entity.cars?.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.model} · {c.registration_no} {c.billing_type === "monthly" ? `(₹${c.monthly_cost_rate}/mo)` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Billing Month (YYYY-MM)</Label>
+              <Input
+                type="month"
+                value={monthlyRentForm.month}
+                onChange={(e) => setMonthlyRentForm({ ...monthlyRentForm, month: e.target.value })}
+                className="h-9"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Agreed Monthly Rent (₹)</Label>
+              <Input
+                type="number"
+                value={monthlyRentForm.amount}
+                onChange={(e) => setMonthlyRentForm({ ...monthlyRentForm, amount: e.target.value })}
+                placeholder="e.g. 30000"
+                className="h-9 font-bold font-tabular"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Notes / Contract Reference</Label>
+              <Input
+                value={monthlyRentForm.notes}
+                onChange={(e) => setMonthlyRentForm({ ...monthlyRentForm, notes: e.target.value })}
+                placeholder="e.g. Full month fixed lease"
+                className="h-9"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMonthlyRentModalOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handlePostMonthlyRent}
+              disabled={postingMonthlyRent}
+              className="bg-purple-800 hover:bg-purple-900 text-white font-bold"
+            >
+              {postingMonthlyRent ? "Posting…" : "Post Monthly Rent to Statement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Handover Expense Dialog */}
       <Dialog open={expenseModalOpen} onOpenChange={setExpenseModalOpen}>
@@ -681,7 +945,7 @@ export default function EntityLedgerPage({ type }) {
           </DialogHeader>
           <div className="space-y-4 py-2 text-xs">
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 leading-relaxed">
-              💡 <strong>Handover Deduction:</strong> Record any extra fuel, washing, or maintenance you paid upon taking the car from this owner. This will be deducted during payout settlement.
+              💡 <strong>Handover Deduction:</strong> Record any fuel, washing, Fastag, or repairs paid out-of-pocket for this car. This will be deducted during payout settlement.
             </div>
 
             <div className="space-y-1.5">
@@ -731,7 +995,7 @@ export default function EntityLedgerPage({ type }) {
                 value={expenseForm.amount}
                 onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
                 placeholder="e.g. 1000"
-                className="h-9"
+                className="h-9 font-tabular"
               />
             </div>
 
@@ -740,7 +1004,7 @@ export default function EntityLedgerPage({ type }) {
               <Input
                 value={expenseForm.description}
                 onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-                placeholder="e.g. 10L petrol filled at Porvorim pump before delivery"
+                placeholder="e.g. Full wash at Calangute / 10L petrol top-up"
                 className="h-9"
               />
             </div>
@@ -780,17 +1044,19 @@ export default function EntityLedgerPage({ type }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
               <MessageSquare className="w-5 h-5 text-emerald-600" />
-              WhatsApp Settlement Statement
+              {isMonthlyFilterActive ? "Monthly WhatsApp Settlement Statement" : "WhatsApp Settlement Statement"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="text-xs text-slate-600">
-              Preview of the settlement statement formatted for WhatsApp:
+              {isMonthlyFilterActive
+                ? `Preview of the monthly invoice statement for ${selectedMonth}:`
+                : "Preview of cumulative statement formatted for WhatsApp:"}
             </div>
             <Textarea
               value={buildWhatsAppText()}
               readOnly
-              rows={12}
+              rows={13}
               className="font-mono text-xs leading-relaxed bg-[#F4FAFC] border-[#C3E7F1] resize-none"
             />
           </div>
