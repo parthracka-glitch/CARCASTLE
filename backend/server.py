@@ -23,6 +23,7 @@ from routers.bookings_router import router as bookings_router, transfers_router
 from routers.ledger_router import router as ledger_router, finance_router, settings_router
 from routers.reports_router import router as activity_router, reports_router
 from routers.owner_expenses_router import router as owner_expenses_router
+from routers.enquiries_router import router as enquiries_router
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -41,6 +42,7 @@ api.include_router(finance_router)
 api.include_router(settings_router)
 api.include_router(activity_router)
 api.include_router(reports_router)
+api.include_router(enquiries_router)
 
 demo_router = APIRouter(prefix="/demo", tags=["demo"])
 

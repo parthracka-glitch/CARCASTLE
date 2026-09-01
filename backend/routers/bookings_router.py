@@ -211,7 +211,10 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     net_profit = margin - agent_fee
 
     deposit_amt = float(payload.deposit_amount or 0.0)
-    deposit_status = payload.deposit_status or ("received" if deposit_amt > 0 else "none")
+    if deposit_amt > 0 and (not payload.deposit_status or payload.deposit_status == "none"):
+        deposit_status = "received"
+    else:
+        deposit_status = payload.deposit_status or ("received" if deposit_amt > 0 else "none")
 
     booking_dict = payload.model_dump()
     booking_dict["car_id"] = car_id
@@ -232,11 +235,36 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
 
     # Transfer breakdown
     if payload.transfer_type != "none":
-        booking_dict["transfer_cost"] = float(payload.transfer_cost or 1000.0)
-        booking_dict["transfer_driver_share"] = float(payload.transfer_driver_share or 500.0)
-        booking_dict["transfer_manoj_share"] = float(payload.transfer_manoj_share or 500.0)
-        booking_dict["transfer_driver_paid"] = bool(payload.transfer_driver_paid)
-        booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
+        t_cost = float(payload.transfer_cost if payload.transfer_cost is not None else 1000.0)
+        booking_dict["transfer_cost"] = t_cost
+
+        handled_by = payload.transfer_handled_by
+        if not handled_by:
+            if (payload.transfer_driver_share is not None and float(payload.transfer_driver_share) > 0) or (payload.driver_name and payload.driver_name not in ("Owner (Self)", "")):
+                handled_by = "driver"
+            else:
+                handled_by = "self"
+
+        booking_dict["transfer_handled_by"] = handled_by
+        
+        if handled_by == "self":
+            booking_dict["driver_name"] = "Owner (Self)"
+            booking_dict["driver_contact"] = ""
+            booking_dict["driver_fee"] = 0.0
+            booking_dict["transfer_driver_share"] = 0.0
+            booking_dict["transfer_manoj_share"] = t_cost
+            booking_dict["transfer_driver_paid"] = True  # Self handled -> zero driver liability
+            booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
+        else:
+            d_share = float(payload.transfer_driver_share if payload.transfer_driver_share is not None else (payload.driver_fee or 400.0))
+            m_share = float(payload.transfer_manoj_share if payload.transfer_manoj_share is not None else max(0.0, t_cost - d_share))
+            booking_dict["driver_name"] = payload.driver_name if (payload.driver_name and payload.driver_name != "Owner (Self)") else "Driver"
+            booking_dict["driver_contact"] = getattr(payload, "driver_contact", "") or ""
+            booking_dict["driver_fee"] = d_share
+            booking_dict["transfer_driver_share"] = d_share
+            booking_dict["transfer_manoj_share"] = m_share
+            booking_dict["transfer_driver_paid"] = bool(payload.transfer_driver_paid)
+            booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
 
     booking = {
         "id": new_id(),
@@ -520,15 +548,24 @@ async def list_transfers(user: dict = Depends(get_current_user)):
         b["car_registration"] = car.get("registration_no", "—")
         b["owner_name"] = owner_map.get(b.get("owner_id", ""), {}).get("name", "—")
         # Ensure default values for driver and split fields
+        handled_by = b.get("transfer_handled_by") or ("self" if (b.get("driver_name") == "Owner (Self)" or float(b.get("driver_fee", 0.0)) == 0.0) else "driver")
+        b["transfer_handled_by"] = handled_by
         b["driver_name"] = b.get("driver_name") or "Owner (Self)"
+        b["driver_contact"] = b.get("driver_contact") or ""
         b["driver_fee"] = float(b.get("driver_fee") or 0.0)
         b["driver_fee_paid"] = float(b.get("driver_fee_paid") or 0.0)
         b["driver_fee_pending"] = max(0.0, b["driver_fee"] - b["driver_fee_paid"])
-        # ₹1000 transfer split fields
-        b["transfer_cost"] = float(b.get("transfer_cost") or 1000.0)
-        b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 500.0)
-        b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
-        b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or 500.0)
+        # Flexible transfer split fields
+        t_cost = float(b.get("transfer_cost") or 1000.0)
+        b["transfer_cost"] = t_cost
+        if handled_by == "self":
+            b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 0.0)
+            b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or t_cost)
+            b["transfer_driver_paid"] = True
+        else:
+            b["transfer_driver_share"] = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else (b["driver_fee"] or 400.0))
+            b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") if b.get("transfer_manoj_share") is not None else max(0.0, t_cost - b["transfer_driver_share"]))
+            b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
         b["transfer_manoj_paid"] = bool(b.get("transfer_manoj_paid", False))
     if user["role"] == "operator":
         bookings = [_sanitize_for_operator(b) for b in bookings]
@@ -556,11 +593,20 @@ async def get_transfer_schedule(user: dict = Depends(get_current_user)):
         b["car_registration"] = car.get("registration_no", "—")
         b_start = (b.get("start_date") or "")[:10]
         b_end = (b.get("end_date") or "")[:10]
+        h_by = b.get("transfer_handled_by") or ("self" if (b.get("driver_name") == "Owner (Self)" or float(b.get("driver_fee", 0.0)) == 0.0) else "driver")
+        b["transfer_handled_by"] = h_by
         b["driver_name"] = b.get("driver_name") or "Owner (Self)"
-        b["transfer_cost"] = float(b.get("transfer_cost") or 1000.0)
-        b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 500.0)
-        b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
-        b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or 500.0)
+        b["driver_contact"] = b.get("driver_contact") or ""
+        t_cost = float(b.get("transfer_cost") or 1000.0)
+        b["transfer_cost"] = t_cost
+        if h_by == "self":
+            b["transfer_driver_share"] = float(b.get("transfer_driver_share") or 0.0)
+            b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") or t_cost)
+            b["transfer_driver_paid"] = True
+        else:
+            b["transfer_driver_share"] = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else 400.0)
+            b["transfer_manoj_share"] = float(b.get("transfer_manoj_share") if b.get("transfer_manoj_share") is not None else max(0.0, t_cost - b["transfer_driver_share"]))
+            b["transfer_driver_paid"] = bool(b.get("transfer_driver_paid", False))
         b["transfer_manoj_paid"] = bool(b.get("transfer_manoj_paid", False))
 
         if b_start == today_str or b_end == today_str:
@@ -620,16 +666,26 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
     total_split_manoj_paid = 0.0
 
     for b in bookings:
-        driver = b.get("driver_name") or "Owner (Self)"
-        fee = float(b.get("driver_fee") or 0.0)
-        paid = float(b.get("driver_fee_paid") or 0.0)
-        pending = max(0.0, fee - paid)
+        h_by = b.get("transfer_handled_by") or ("self" if (b.get("driver_name") == "Owner (Self)" or float(b.get("driver_fee", 0.0)) == 0.0) else "driver")
+        driver = "Owner (Self)" if h_by == "self" else (b.get("driver_name") or "Driver")
+        t_cost = float(b.get("transfer_cost") or 1000.0)
 
-        # ₹1000 split tracking
-        d_share = float(b.get("transfer_driver_share") or 500.0)
-        m_share = float(b.get("transfer_manoj_share") or 500.0)
-        d_paid = bool(b.get("transfer_driver_paid", False))
-        m_paid = bool(b.get("transfer_manoj_paid", False))
+        if h_by == "self":
+            fee = 0.0
+            paid = 0.0
+            pending = 0.0
+            d_share = 0.0
+            m_share = float(b.get("transfer_manoj_share") or t_cost)
+            d_paid = True
+            m_paid = bool(b.get("transfer_manoj_paid", False))
+        else:
+            fee = float(b.get("transfer_driver_share", b.get("driver_fee", 400.0)))
+            paid = float(b.get("driver_fee_paid") or 0.0)
+            pending = max(0.0, fee - paid)
+            d_share = fee
+            m_share = float(b.get("transfer_manoj_share") if b.get("transfer_manoj_share") is not None else max(0.0, t_cost - d_share))
+            d_paid = bool(b.get("transfer_driver_paid", False))
+            m_paid = bool(b.get("transfer_manoj_paid", False))
 
         if d_paid:
             total_split_driver_paid += d_share
@@ -642,6 +698,7 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
         if driver not in drivers_map:
             drivers_map[driver] = {
                 "driver_name": driver,
+                "is_self": h_by == "self",
                 "total_transfers": 0,
                 "total_fee": 0.0,
                 "total_paid": 0.0,
@@ -659,6 +716,8 @@ async def get_drivers_summary(user: dict = Depends(get_current_user)):
             "start_date": b["start_date"],
             "transfer_type": b["transfer_type"],
             "transfer_status": b["transfer_status"],
+            "transfer_handled_by": h_by,
+            "transfer_cost": t_cost,
             "fee": fee,
             "paid": paid,
             "pending": pending,
@@ -706,24 +765,47 @@ async def update_transfer_driver(booking_id: str, payload: dict, user: dict = De
     if not old:
         raise HTTPException(404, "Booking not found")
 
-    driver_name = payload.get("driver_name", old.get("driver_name", "Owner (Self)"))
-    driver_fee = float(payload.get("driver_fee", old.get("driver_fee", 0.0)))
-    driver_fee_paid = float(payload.get("driver_fee_paid", old.get("driver_fee_paid", 0.0)))
+    transfer_handled_by = payload.get("transfer_handled_by", old.get("transfer_handled_by", "self"))
+    transfer_cost = float(payload.get("transfer_cost", old.get("transfer_cost", 1000.0)))
+    driver_contact = payload.get("driver_contact", old.get("driver_contact", ""))
     transfer_status = payload.get("transfer_status", old.get("transfer_status", "scheduled"))
     transfer_type = payload.get("transfer_type", old.get("transfer_type", "airport_drop"))
     flight_time = payload.get("flight_time", old.get("flight_time", ""))
     transfer_pickup_point = payload.get("transfer_pickup_point", old.get("transfer_pickup_point", ""))
     notes = payload.get("notes", old.get("notes", ""))
 
-    # ₹1000 Split Updates
-    transfer_cost = float(payload.get("transfer_cost", old.get("transfer_cost", 1000.0)))
-    transfer_driver_share = float(payload.get("transfer_driver_share", old.get("transfer_driver_share", 500.0)))
-    transfer_driver_paid = bool(payload.get("transfer_driver_paid", old.get("transfer_driver_paid", False)))
-    transfer_manoj_share = float(payload.get("transfer_manoj_share", old.get("transfer_manoj_share", 500.0)))
-    transfer_manoj_paid = bool(payload.get("transfer_manoj_paid", old.get("transfer_manoj_paid", False)))
+    if transfer_handled_by == "self":
+        driver_name = payload.get("driver_name", "Owner (Self)")
+        driver_fee = 0.0
+        driver_fee_paid = 0.0
+        transfer_driver_share = 0.0
+        transfer_driver_paid = True
+        transfer_manoj_share = transfer_cost
+        transfer_manoj_paid = bool(payload.get("transfer_manoj_paid", old.get("transfer_manoj_paid", False)))
+    else:
+        driver_name = payload.get("driver_name", old.get("driver_name", "Driver"))
+        if "transfer_driver_share" in payload:
+            transfer_driver_share = float(payload["transfer_driver_share"])
+        elif "driver_fee" in payload:
+            transfer_driver_share = float(payload["driver_fee"])
+        else:
+            transfer_driver_share = float(old.get("transfer_driver_share", 400.0))
+
+        driver_fee = transfer_driver_share
+        driver_fee_paid = float(payload.get("driver_fee_paid", old.get("driver_fee_paid", 0.0)))
+        transfer_driver_paid = bool(payload.get("transfer_driver_paid", old.get("transfer_driver_paid", False)))
+
+        if "transfer_manoj_share" in payload:
+            transfer_manoj_share = float(payload["transfer_manoj_share"])
+        else:
+            transfer_manoj_share = max(0.0, transfer_cost - transfer_driver_share)
+
+        transfer_manoj_paid = bool(payload.get("transfer_manoj_paid", old.get("transfer_manoj_paid", False)))
 
     updates = {
+        "transfer_handled_by": transfer_handled_by,
         "driver_name": driver_name,
+        "driver_contact": driver_contact,
         "driver_fee": driver_fee,
         "driver_fee_paid": driver_fee_paid,
         "transfer_status": transfer_status,

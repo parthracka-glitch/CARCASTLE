@@ -149,16 +149,18 @@ class BookingCreate(BaseModel):
     deposit_refunded_at: Optional[str] = None
     transfer_type: TransferType = "none"
     transfer_status: Optional[TransferStatus] = "scheduled"
+    transfer_handled_by: Optional[str] = None  # None | "self" | "driver"
     transfer_cost: Optional[float] = 1000.0
-    transfer_driver_share: Optional[float] = 500.0
+    transfer_driver_share: Optional[float] = None
     transfer_driver_paid: Optional[bool] = False
-    transfer_manoj_share: Optional[float] = 500.0
+    transfer_manoj_share: Optional[float] = None
     transfer_manoj_paid: Optional[bool] = False
     flight_time: Optional[str] = ""
     transfer_pickup_point: Optional[str] = ""
     assigned_agent_id: Optional[str] = None
     agent_fee: float = 0.0
     driver_name: Optional[str] = "Owner (Self)"
+    driver_contact: Optional[str] = ""
     driver_fee: Optional[float] = 0.0  # Decided/Agreed fee for driver
     driver_fee_paid: Optional[float] = 0.0  # Amount paid to driver so far
     notes: Optional[str] = ""
@@ -191,6 +193,7 @@ class BookingUpdate(BaseModel):
     status: Optional[BookingStatus] = None
     transfer_type: Optional[TransferType] = None
     transfer_status: Optional[TransferStatus] = None
+    transfer_handled_by: Optional[str] = None
     transfer_cost: Optional[float] = None
     transfer_driver_share: Optional[float] = None
     transfer_driver_paid: Optional[bool] = None
@@ -201,6 +204,7 @@ class BookingUpdate(BaseModel):
     assigned_agent_id: Optional[str] = None
     agent_fee: Optional[float] = None
     driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
     driver_fee: Optional[float] = None
     driver_fee_paid: Optional[float] = None
     notes: Optional[str] = None
@@ -250,16 +254,18 @@ class Booking(BaseModel):
     status: BookingStatus = "reserved"
     transfer_type: TransferType = "none"
     transfer_status: TransferStatus = "none"
+    transfer_handled_by: str = "self"  # "self" | "driver"
     transfer_cost: float = 1000.0
-    transfer_driver_share: float = 500.0
+    transfer_driver_share: float = 0.0
     transfer_driver_paid: bool = False
-    transfer_manoj_share: float = 500.0
+    transfer_manoj_share: float = 1000.0
     transfer_manoj_paid: bool = False
     flight_time: str = ""
     transfer_pickup_point: str = ""
     assigned_agent_id: Optional[str] = None
     agent_fee: float = 0.0
     driver_name: str = "Owner (Self)"
+    driver_contact: str = ""
     driver_fee: float = 0.0
     driver_fee_paid: float = 0.0
     net_profit: float  # margin - agent_fee
@@ -406,5 +412,53 @@ class MonthlyRetainerPost(BaseModel):
     month: str  # YYYY-MM
     amount: float
     notes: Optional[str] = ""
+
+
+# ---------- Enquiries ----------
+EnquiryStatus = Literal["new", "contacted", "converted", "lost"]
+
+
+class EnquiryCreate(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = ""
+    city: str
+    state: str
+    car_id: Optional[str] = None
+    car_model: Optional[str] = ""
+    enquiry_date: Optional[str] = None
+    notes: Optional[str] = ""
+    status: Optional[EnquiryStatus] = "new"
+
+
+class EnquiryUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    car_id: Optional[str] = None
+    car_model: Optional[str] = None
+    enquiry_date: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[EnquiryStatus] = None
+
+
+class Enquiry(BaseModel):
+    id: str = Field(default_factory=new_id)
+    name: str
+    phone: str
+    email: str = ""
+    city: str
+    state: str
+    car_id: Optional[str] = None
+    car_model: str = ""
+    enquiry_date: str = Field(default_factory=now_iso)
+    notes: str = ""
+    status: EnquiryStatus = "new"
+    created_by: Optional[str] = ""
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
 
 

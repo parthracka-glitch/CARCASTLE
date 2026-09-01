@@ -14,10 +14,12 @@ import {
   Settings,
   LogOut,
   X,
+  MessageSquareQuote,
 } from "lucide-react";
 
 const nav = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["super_admin", "operator"] },
+  { to: "/enquiries", icon: MessageSquareQuote, label: "Enquiries & Leads", roles: ["super_admin", "operator"] },
   { to: "/bookings", icon: CalendarClock, label: "Bookings", roles: ["super_admin", "operator"] },
   { to: "/transfers", icon: Plane, label: "Airport Transfers", roles: ["super_admin", "operator"] },
   { to: "/owners", icon: Users, label: "Car Owners", roles: ["super_admin", "operator"] },

@@ -16,7 +16,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plane, ChevronRight, User, Edit3, IndianRupee, Car, CheckCircle2, Clock, HelpCircle, Users, Calendar, Plus } from "lucide-react";
+import {
+  Plane, ChevronRight, User, Edit3, IndianRupee, Car, CheckCircle2,
+  Clock, HelpCircle, Users, Calendar, Plus, MessageSquare, Phone,
+  ExternalLink, Check, ShieldCheck, Tag
+} from "lucide-react";
 
 const stages = [
   { id: "scheduled", label: "Scheduled" },
@@ -35,8 +39,15 @@ const newTransferEmpty = {
   transfer_type: "airport_drop",
   flight_time: "14:30 AI-671",
   transfer_pickup_point: "MOPA Airport Terminal 1",
+  transfer_handled_by: "self", // "self" | "driver"
   driver_name: "Owner (Self)",
-  driver_fee: "500",
+  driver_contact: "",
+  transfer_cost: "1000",
+  transfer_driver_share: "0",
+  transfer_manoj_share: "1000",
+  transfer_driver_paid: true,
+  transfer_manoj_paid: false,
+  driver_fee: "0",
   driver_fee_paid: "0",
   customer_rate: "1500",
   cost_rate: "1000",
@@ -59,13 +70,15 @@ export default function TransfersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [form, setForm] = useState({
+    transfer_handled_by: "self",
     driver_name: "Owner (Self)",
+    driver_contact: "",
     driver_fee: "0",
     driver_fee_paid: "0",
     transfer_cost: "1000",
-    transfer_driver_share: "500",
-    transfer_driver_paid: false,
-    transfer_manoj_share: "500",
+    transfer_driver_share: "0",
+    transfer_driver_paid: true,
+    transfer_manoj_share: "1000",
     transfer_manoj_paid: false,
     transfer_status: "scheduled",
     transfer_type: "airport_drop",
@@ -95,6 +108,37 @@ export default function TransfersPage() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
+  // Dispatch WhatsApp message to driver
+  const sendDriverWhatsApp = (b) => {
+    const isPickup = b.transfer_type === "airport_pickup";
+    const isBoth = b.transfer_type === "both";
+    const tType = isBoth ? "AIRPORT PICKUP & DROP" : isPickup ? "AIRPORT PICKUP" : "AIRPORT DROP";
+    const dateStr = b.start_date
+      ? new Date(b.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      : "";
+    const cutAmt = formatInr(b.transfer_driver_share || 400);
+
+    const text =
+      `🌴 *CAR CASTLE GOA — AIRPORT TRANSFER DUTY*\n` +
+      `🚗 *Duty Type:* ${tType}\n` +
+      `📅 *Date:* ${dateStr}\n` +
+      `✈️ *Flight / Time:* ${b.flight_time || "To be confirmed"}\n` +
+      `📍 *Terminal / Pickup Point:* ${b.transfer_pickup_point || b.pickup_location || "Airport"}\n` +
+      `📍 *Drop Destination:* ${b.drop_location || "Goa"}\n` +
+      `👤 *Passenger:* ${b.customer_name} (${b.customer_contact || "No phone"})\n` +
+      `🚘 *Vehicle:* ${b.car_model || "Car"} (${b.car_registration || "Fleet"})\n` +
+      `------------------------------------\n` +
+      `💰 *Agreed Cut for Driver:* ${cutAmt}\n` +
+      `Please coordinate with the passenger and reach 15 minutes before flight arrival. Safe driving! 🚕✨`;
+
+    const phone = (b.driver_contact || "").replace(/[^0-9]/g, "");
+    const phoneParam = phone ? (phone.startsWith("91") ? phone : `91${phone}`) : "";
+    const url = phoneParam
+      ? `https://wa.me/${phoneParam}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
+
   const createTransfer = async () => {
     if (!newForm.customer_name || !newForm.car_id) {
       toast.error("Please enter customer name and select a car");
@@ -102,6 +146,11 @@ export default function TransfersPage() {
     }
     setSaving(true);
     try {
+      const isSelf = newForm.transfer_handled_by === "self";
+      const tCost = Number(newForm.transfer_cost || 1000);
+      const dCut = isSelf ? 0 : Number(newForm.transfer_driver_share || 400);
+      const mShare = isSelf ? tCost : Number(newForm.transfer_manoj_share || Math.max(0, tCost - dCut));
+
       const payload = {
         customer_name: newForm.customer_name,
         customer_contact: newForm.customer_contact || "N/A",
@@ -111,16 +160,18 @@ export default function TransfersPage() {
         pickup_location: newForm.pickup_location || "Airport",
         drop_location: newForm.drop_location || "Hotel",
         transfer_type: newForm.transfer_type,
+        transfer_handled_by: newForm.transfer_handled_by,
         flight_time: newForm.flight_time,
         transfer_pickup_point: newForm.transfer_pickup_point,
-        driver_name: newForm.driver_name || "Owner (Self)",
-        driver_fee: Number(newForm.driver_fee || 0),
-        driver_fee_paid: Number(newForm.driver_fee_paid || 0),
-        transfer_cost: 1000,
-        transfer_driver_share: 500,
-        transfer_driver_paid: false,
-        transfer_manoj_share: 500,
-        transfer_manoj_paid: false,
+        driver_name: isSelf ? "Owner (Self)" : (newForm.driver_name || "Driver"),
+        driver_contact: isSelf ? "" : (newForm.driver_contact || ""),
+        driver_fee: dCut,
+        driver_fee_paid: isSelf ? 0 : (newForm.transfer_driver_paid ? dCut : 0),
+        transfer_cost: tCost,
+        transfer_driver_share: dCut,
+        transfer_driver_paid: isSelf ? true : Boolean(newForm.transfer_driver_paid),
+        transfer_manoj_share: mShare,
+        transfer_manoj_paid: Boolean(newForm.transfer_manoj_paid),
         customer_rate: Number(newForm.customer_rate || 0),
         cost_rate: Number(newForm.cost_rate || 0),
         notes: newForm.notes,
@@ -140,14 +191,21 @@ export default function TransfersPage() {
 
   const openEdit = (b) => {
     setSelectedBooking(b);
+    const handledBy = b.transfer_handled_by || (b.driver_name === "Owner (Self)" || Number(b.driver_fee) === 0 ? "self" : "driver");
+    const tCost = String(b.transfer_cost || 1000);
+    const dCut = String(b.transfer_driver_share ?? (handledBy === "self" ? 0 : 400));
+    const mShare = String(b.transfer_manoj_share ?? (handledBy === "self" ? tCost : Math.max(0, Number(tCost) - Number(dCut))));
+
     setForm({
-      driver_name: b.driver_name || "Owner (Self)",
-      driver_fee: String(b.driver_fee || 0),
+      transfer_handled_by: handledBy,
+      driver_name: b.driver_name || (handledBy === "self" ? "Owner (Self)" : "Driver"),
+      driver_contact: b.driver_contact || "",
+      driver_fee: String(b.driver_fee || dCut),
       driver_fee_paid: String(b.driver_fee_paid || 0),
-      transfer_cost: String(b.transfer_cost || 1000),
-      transfer_driver_share: String(b.transfer_driver_share || 500),
-      transfer_driver_paid: Boolean(b.transfer_driver_paid),
-      transfer_manoj_share: String(b.transfer_manoj_share || 500),
+      transfer_cost: tCost,
+      transfer_driver_share: dCut,
+      transfer_driver_paid: handledBy === "self" ? true : Boolean(b.transfer_driver_paid),
+      transfer_manoj_share: mShare,
       transfer_manoj_paid: Boolean(b.transfer_manoj_paid),
       transfer_status: b.transfer_status || "scheduled",
       transfer_type: b.transfer_type || "airport_drop",
@@ -162,7 +220,7 @@ export default function TransfersPage() {
     try {
       const updates = { [field]: !currentVal };
       await api.put(`/transfers/${b.id}/driver`, updates);
-      toast.success(`Updated ${field === "transfer_driver_paid" ? "Cab Driver" : "Manoj"} payment status`);
+      toast.success(`Updated ${field === "transfer_driver_paid" ? "Driver Cut" : "Manoj / Owner"} status`);
       await load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed to update split payment");
@@ -173,14 +231,21 @@ export default function TransfersPage() {
     if (!selectedBooking) return;
     setSaving(true);
     try {
+      const isSelf = form.transfer_handled_by === "self";
+      const tCost = Number(form.transfer_cost || 1000);
+      const dCut = isSelf ? 0 : Number(form.transfer_driver_share || 400);
+      const mShare = isSelf ? tCost : Number(form.transfer_manoj_share || Math.max(0, tCost - dCut));
+
       await api.put(`/transfers/${selectedBooking.id}/driver`, {
-        driver_name: form.driver_name,
-        driver_fee: Number(form.driver_fee),
-        driver_fee_paid: Number(form.driver_fee_paid),
-        transfer_cost: Number(form.transfer_cost || 1000),
-        transfer_driver_share: Number(form.transfer_driver_share || 500),
-        transfer_driver_paid: Boolean(form.transfer_driver_paid),
-        transfer_manoj_share: Number(form.transfer_manoj_share || 500),
+        transfer_handled_by: form.transfer_handled_by,
+        driver_name: isSelf ? "Owner (Self)" : (form.driver_name || "Driver"),
+        driver_contact: isSelf ? "" : (form.driver_contact || ""),
+        driver_fee: dCut,
+        driver_fee_paid: isSelf ? 0 : (form.transfer_driver_paid ? dCut : Number(form.driver_fee_paid || 0)),
+        transfer_cost: tCost,
+        transfer_driver_share: dCut,
+        transfer_driver_paid: isSelf ? true : Boolean(form.transfer_driver_paid),
+        transfer_manoj_share: mShare,
         transfer_manoj_paid: Boolean(form.transfer_manoj_paid),
         transfer_status: form.transfer_status,
         transfer_type: form.transfer_type,
@@ -188,7 +253,7 @@ export default function TransfersPage() {
         transfer_pickup_point: form.transfer_pickup_point,
         notes: form.notes,
       });
-      toast.success("Transfer & Driver details updated");
+      toast.success("Transfer & Driver cut details updated");
       setEditOpen(false);
       await load();
     } catch (e) {
@@ -216,228 +281,237 @@ export default function TransfersPage() {
 
   const totalDriverFees = rows.reduce((acc, r) => acc + Number(r.driver_fee || 0), 0);
   const totalDriverPaid = rows.reduce((acc, r) => acc + Number(r.driver_fee_paid || 0), 0);
-  const totalDriverPending = totalDriverFees - totalDriverPaid;
-
-  const totalSplitDriverPaid = rows.reduce((acc, r) => acc + (r.transfer_driver_paid ? Number(r.transfer_driver_share || 500) : 0), 0);
-  const totalSplitManojPaid = rows.reduce((acc, r) => acc + (r.transfer_manoj_paid ? Number(r.transfer_manoj_share || 500) : 0), 0);
+  const totalDriverPending = Math.max(0, totalDriverFees - totalDriverPaid);
+  const totalSelfHandled = rows.filter((r) => r.transfer_handled_by === "self" || r.driver_name === "Owner (Self)").length;
 
   return (
     <AppLayout
-      title="Airport Transfers & Cost Breakdown"
-      subtitle="Customer ₹1,000 transfer split (₹500 Cab Driver · ₹500 Manoj), driver fee tracking & schedules."
+      title="Airport Transfers"
+      subtitle="Flight pickups & drops tracking, owner self-handling vs driver cut management"
       actions={
-        <Button
-          onClick={() => setNewOpen(true)}
-          className="bg-[#20373B] hover:bg-[#2C494E] shadow-md text-[#FFC64F] font-bold border border-[#2C494E]"
-          data-testid="add-transfer-button"
-        >
-          <Plus className="w-4 h-4 mr-1.5 text-[#FFC64F]" /> Add New Airport Transfer
-        </Button>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <Button
+            onClick={() => setNewOpen(true)}
+            className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-[11px] sm:text-xs h-8 sm:h-9 px-2.5 sm:px-4 shadow-xs"
+            data-testid="add-transfer-header-button"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            <span className="hidden sm:inline">Add Airport Transfer</span>
+            <span className="sm:hidden">+ Transfer</span>
+          </Button>
+        </div>
       }
     >
-      {/* Informative Explanation Banner */}
-      <div className="mb-6 p-5 rounded-xl bg-[#20373B] text-white shadow-lg border border-[#2C494E] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-lg bg-[#FFC64F] text-[#20373B] flex items-center justify-center shrink-0 shadow-md mt-0.5 font-bold">
-            <Plane className="w-5 h-5" strokeWidth={2.5} />
+      {/* 4 Responsive Summary Metric Cards (2x2 on phone) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-white border border-[#C3E7F1] rounded-xl p-3.5 sm:p-5 shadow-xs">
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-500 font-bold">Total Transfers</div>
+          <div className="font-display text-lg sm:text-2xl font-extrabold text-[#20373B] mt-1 sm:mt-2 font-tabular">
+            {rows.length}
           </div>
-          <div>
-            <h3 className="font-display font-bold text-white flex items-center gap-2 text-base">
-              Airport Transfer Split (₹1,000 Standard Charge)
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#519CAB]/30 text-[#FFC64F] font-medium border border-[#519CAB]/40">
-                ₹500 Cab Driver · ₹500 Manoj
-              </span>
-            </h3>
-            <p className="text-xs text-[#C3E7F1] mt-1 max-w-3xl leading-relaxed">
-              Every airport pickup/drop charged to the customer at ₹1,000 splits into <strong>₹500 to the cab driver</strong> and <strong>₹500 to Manoj</strong>. You can record payment status, mark who was paid, and track settled balances per trip.
-            </p>
-          </div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Pickups & drops booked</div>
         </div>
-        <div className="text-xs font-medium text-[#C3E7F1] flex items-center gap-1.5 bg-[#16272A]/80 px-3 py-1.5 rounded-lg border border-[#2C494E] shrink-0">
-          <HelpCircle className="w-4 h-4 text-[#FFC64F]" />
-          <span>Automatic 50/50 Split</span>
+
+        <div className="bg-white border border-emerald-200 bg-emerald-50/20 rounded-xl p-3.5 sm:p-5 shadow-xs">
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-emerald-800 font-bold flex items-center gap-1">
+            <User className="w-3 h-3 text-emerald-600" /> Owner Handled
+          </div>
+          <div className="font-display text-lg sm:text-2xl font-extrabold text-emerald-700 mt-1 sm:mt-2 font-tabular">
+            {totalSelfHandled}
+          </div>
+          <div className="text-[10px] text-emerald-600 mt-0.5">100% kept · Zero driver cut</div>
+        </div>
+
+        <div className="bg-white border border-[#C3E7F1] rounded-xl p-3.5 sm:p-5 shadow-xs">
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-500 font-bold">Driver Cuts Paid</div>
+          <div className="font-display text-lg sm:text-2xl font-extrabold text-emerald-600 mt-1 sm:mt-2 font-tabular">
+            {formatInr(totalDriverPaid)}
+          </div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Paid to third-party drivers</div>
+        </div>
+
+        <div className={`bg-white border rounded-xl p-3.5 sm:p-5 shadow-xs ${totalDriverPending > 0 ? "border-amber-300 bg-amber-50/20" : "border-[#C3E7F1]"}`}>
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-amber-800 font-bold">Pending Driver Cuts</div>
+          <div className="font-display text-lg sm:text-2xl font-extrabold text-amber-900 mt-1 sm:mt-2 font-tabular">
+            {formatInr(totalDriverPending)}
+          </div>
+          <div className="text-[10px] text-amber-700 mt-0.5">Owed to drivers for duties</div>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <TabsList className="bg-[#C3E7F1]/30 border border-[#C3E7F1]">
-            <TabsTrigger value="kanban" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
-              <Plane className="w-4 h-4 mr-1.5 text-[#519CAB]" /> Transfer Pipeline & Splits
-            </TabsTrigger>
-            <TabsTrigger value="drivers" className="data-[state=active]:bg-white data-[state=active]:text-[#20373B] font-semibold">
-              <Users className="w-4 h-4 mr-1.5 text-[#519CAB]" /> Driver Payout Summary
-            </TabsTrigger>
-          </TabsList>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-white border border-[#C3E7F1] p-1 h-auto flex flex-wrap gap-1 rounded-xl shadow-xs">
+          <TabsTrigger value="kanban" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
+            📋 Transfer Board (Kanban)
+          </TabsTrigger>
+          <TabsTrigger value="drivers" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
+            🚕 Driver Cuts & Payout Ledger
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Quick Metrics */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4 bg-white border border-[#C3E7F1] rounded-lg p-2.5 sm:px-4 sm:py-2 text-xs shadow-xs">
-            <div>
-              <span className="text-slate-400 font-medium">Driver Split Paid:</span>{" "}
-              <span className="font-semibold font-tabular text-emerald-600">{formatInr(totalSplitDriverPaid)}</span>
-            </div>
-            <div className="h-3 w-px bg-slate-200 hidden sm:block" />
-            <div>
-              <span className="text-slate-400 font-medium">Manoj Split Paid:</span>{" "}
-              <span className="font-semibold font-tabular text-blue-600">{formatInr(totalSplitManojPaid)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* TAB 1: KANBAN PIPELINE */}
+        {/* TAB 1: KANBAN BOARD */}
         <TabsContent value="kanban" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="transfers-kanban">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {stages.map((s) => (
-              <div key={s.id} className="bg-slate-100/70 border border-slate-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
+              <div key={s.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${s.id === "scheduled" ? "bg-sky-500" : s.id === "en_route" ? "bg-amber-500" : "bg-emerald-500"}`} />
-                    <div className="font-display font-semibold text-slate-900 text-sm uppercase tracking-wider">{s.label}</div>
+                    <span className="font-display font-bold text-xs uppercase tracking-wider text-[#20373B]">
+                      {s.label}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[#20373B]">
+                      {grouped[s.id].length}
+                    </span>
                   </div>
-                  <span className="text-xs bg-white px-2 py-0.5 rounded-full text-slate-600 font-semibold font-tabular border border-slate-200">
-                    {grouped[s.id].length}
-                  </span>
                 </div>
 
-                <div className="space-y-3" data-testid={`transfer-column-${s.id}`}>
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
                   {grouped[s.id].map((b) => {
-                    const fee = Number(b.driver_fee || 0);
-                    const paid = Number(b.driver_fee_paid || 0);
-                    const pending = Math.max(0, fee - paid);
-                    const isSelf = (b.driver_name || "Owner (Self)").toLowerCase().includes("owner");
+                    const isSelf = b.transfer_handled_by === "self" || b.driver_name === "Owner (Self)";
+                    const dFee = Number(b.driver_fee || b.transfer_driver_share || 0);
 
                     return (
                       <Card
                         key={b.id}
-                        className="p-4 bg-white border border-[#C3E7F1] hover:border-[#519CAB] hover:shadow-md transition-all relative group rounded-xl"
-                        data-testid={`transfer-card-${b.id}`}
+                        className="p-3.5 bg-white border border-[#C3E7F1] shadow-xs rounded-xl hover:border-[#519CAB] transition-all space-y-2.5"
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <StatusPill status={b.transfer_type} />
-                          <span className="text-[10px] text-[#20373B]/70 font-mono flex items-center gap-1 bg-[#F4FAFC] px-2 py-0.5 rounded border border-[#C3E7F1]">
-                            <Calendar className="w-3 h-3 text-[#519CAB]" /> {formatDate(b.start_date)}
+                        {/* Customer & Route Header */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-[#20373B] text-sm truncate flex items-center gap-1.5">
+                              <span>{b.customer_name}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" />
+                              <span>{b.customer_contact || "No phone"}</span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 shrink-0">
+                            {b.transfer_type === "airport_pickup" ? "🛬 Pickup" : b.transfer_type === "airport_drop" ? "🛫 Drop" : "🔄 Both"}
                           </span>
                         </div>
 
-                        {/* Customer & Location */}
-                        <div className="font-bold text-[#20373B] text-sm">{b.customer_name}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{b.customer_contact}</div>
-                        
-                        <div className="text-xs text-[#20373B] mt-2 flex items-center gap-1.5 bg-[#F4FAFC] p-2 rounded-lg border border-[#C3E7F1]">
-                          <Plane className="w-3.5 h-3.5 text-[#519CAB] shrink-0" />
-                          <span className="font-semibold">{b.flight_time || "Time N/A"}</span> · <span className="truncate">{b.transfer_pickup_point || b.pickup_location}</span>
-                        </div>
-
-                        {/* Car Details */}
-                        <div className="text-xs text-slate-600 mt-2 flex items-center gap-1.5">
-                          <Car className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{b.car_model}</span>
-                          <span className="font-mono text-[11px] bg-[#C3E7F1]/30 px-1.5 py-0.5 rounded text-[#20373B]">{b.car_registration}</span>
-                        </div>
-
-                        {/* ₹1000 Standard Airport Transfer Split Strip */}
-                        <div className="mt-3 p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1] space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between text-[11px] font-bold text-[#20373B]">
-                            <span>Airport Transfer Split:</span>
-                            <span className="font-tabular text-[#519CAB]">Total: {formatInr(b.transfer_cost || 1000)}</span>
+                        {/* Vehicle & Flight details */}
+                        <div className="p-2 rounded-lg bg-[#F4FAFC] border border-[#C3E7F1]/60 text-xs space-y-1">
+                          <div className="flex items-center justify-between text-slate-700">
+                            <span className="font-medium flex items-center gap-1">
+                              <Car className="w-3 h-3 text-[#519CAB]" />
+                              {b.car_model || "Car"}
+                            </span>
+                            <span className="font-mono text-[11px] text-[#519CAB] font-semibold">{b.car_registration || "Fleet"}</span>
                           </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            {/* Driver Share */}
-                            <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
-                                <span>🚕 Driver</span>
-                                <span className="font-tabular font-bold text-[#20373B]">{formatInr(b.transfer_driver_share || 500)}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => toggleSplitPayment(b, "transfer_driver_paid", b.transfer_driver_paid)}
-                                className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                                  b.transfer_driver_paid
-                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                    : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
-                                }`}
-                              >
-                                {b.transfer_driver_paid ? "✅ Driver Paid" : "⏳ Driver Pending"}
-                              </button>
+                          {b.flight_time && (
+                            <div className="text-[11px] text-slate-600 flex items-center gap-1">
+                              <Plane className="w-3 h-3 text-slate-400" />
+                              <strong className="text-slate-800">Flight:</strong> {b.flight_time}
                             </div>
-
-                            {/* Manoj Share */}
-                            <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
-                                <span>💼 Manoj</span>
-                                <span className="font-tabular font-bold text-[#20373B]">{formatInr(b.transfer_manoj_share || 500)}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => toggleSplitPayment(b, "transfer_manoj_paid", b.transfer_manoj_paid)}
-                                className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                                  b.transfer_manoj_paid
-                                    ? "bg-blue-50 text-blue-800 border-blue-300"
-                                    : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
-                                }`}
-                              >
-                                {b.transfer_manoj_paid ? "✅ Manoj Paid" : "⏳ Manoj Pending"}
-                              </button>
+                          )}
+                          {b.transfer_pickup_point && (
+                            <div className="text-[10px] text-slate-500 truncate">
+                              📍 {b.transfer_pickup_point}
                             </div>
-                          </div>
+                          )}
                         </div>
 
-                        {/* Driver & Financials Box */}
-                        <div className="mt-3 pt-3 border-t border-[#C3E7F1]/60">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1 text-[#20373B]">
-                              <User className="w-3.5 h-3.5 text-[#519CAB]" />
-                              <span className="font-semibold">{b.driver_name || "Owner (Self)"}</span>
-                              {isSelf && <span className="text-[10px] text-slate-400 bg-slate-100 px-1 rounded">(Self)</span>}
+                        {/* Transfer Handling & Cut Distribution Banner */}
+                        {isSelf ? (
+                          <div className="p-2.5 rounded-lg bg-emerald-50/90 border border-emerald-200 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Handled by Owner (Self)</span>
                             </div>
+                            <span className="text-[10px] font-extrabold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200 font-tabular shrink-0">
+                              100% Kept: {formatInr(b.transfer_cost || 1000)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-[#20373B]">
+                              <span>Driver Cut Basis:</span>
+                              <span className="font-tabular text-[#519CAB]">Total: {formatInr(b.transfer_cost || 1000)}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-0.5">
+                              {/* Driver Cut Share */}
+                              <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
+                                  <span className="truncate">🚕 {b.driver_name || "Driver"}</span>
+                                  <span className="font-tabular font-bold text-[#20373B] shrink-0">{formatInr(b.transfer_driver_share || 400)}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSplitPayment(b, "transfer_driver_paid", b.transfer_driver_paid)}
+                                  className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    b.transfer_driver_paid
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                      : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                                  }`}
+                                >
+                                  {b.transfer_driver_paid ? "✅ Cut Paid" : "⏳ Cut Pending"}
+                                </button>
+                              </div>
+
+                              {/* Manoj / Owner Share */}
+                              <div className="bg-white p-2 rounded-md border border-[#C3E7F1]/80 space-y-1">
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold uppercase">
+                                  <span className="truncate">💼 Owner Share</span>
+                                  <span className="font-tabular font-bold text-[#20373B] shrink-0">{formatInr(b.transfer_manoj_share || 600)}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSplitPayment(b, "transfer_manoj_paid", b.transfer_manoj_paid)}
+                                  className={`w-full py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    b.transfer_manoj_paid
+                                      ? "bg-blue-50 text-blue-800 border-blue-300"
+                                      : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                                  }`}
+                                >
+                                  {b.transfer_manoj_paid ? "✅ Received" : "⏳ Pending"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
+                          <div className="flex items-center gap-1">
+                            {!isSelf && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => sendDriverWhatsApp(b)}
+                                className="h-7 px-2 text-[11px] font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                                title="Send duty details to driver via WhatsApp"
+                              >
+                                <MessageSquare className="w-3 h-3 mr-1 text-emerald-600" /> Dispatch
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => openEdit(b)}
-                              className="h-6 px-2 text-[11px] text-[#519CAB] hover:bg-[#C3E7F1]/30 hover:text-[#20373B] font-semibold"
+                              className="h-7 px-2 text-[11px] text-[#519CAB] hover:bg-[#C3E7F1]/30 font-semibold"
                             >
-                              <Edit3 className="w-3 h-3 mr-1" /> Edit Driver
+                              <Edit3 className="w-3 h-3 mr-1" /> Edit Cut
                             </Button>
                           </div>
 
-                          {/* Fee breakdown */}
-                          {fee > 0 ? (
-                            <div className="mt-2 grid grid-cols-3 gap-1 bg-slate-50 p-2 rounded-lg text-center text-[11px]">
-                              <div>
-                                <span className="text-slate-400 block text-[9px] uppercase font-semibold">Decided Fee</span>
-                                <span className="font-tabular font-semibold text-slate-800">{formatInr(fee)}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[9px] uppercase font-semibold">Paid</span>
-                                <span className="font-tabular font-semibold text-emerald-600">{formatInr(paid)}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[9px] uppercase font-semibold">Pending</span>
-                                <span className={`font-tabular font-semibold ${pending > 0 ? "text-red-600" : "text-slate-500"}`}>
-                                  {formatInr(pending)}
-                                </span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mt-1.5 text-[11px] text-slate-400 italic">No driver fee specified</div>
-                          )}
-                        </div>
-
-                        {/* Action buttons to change stage */}
-                        <div className="flex gap-1.5 mt-3 pt-2 border-t border-slate-100">
-                          {stages.filter((x) => x.id !== s.id).map((x) => (
-                            <Button
-                              key={x.id}
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-[11px] flex-1 bg-slate-50 hover:bg-white"
-                              onClick={() => setStatus(b.id, x.id)}
-                              data-testid={`transfer-move-${b.id}-${x.id}`}
-                            >
-                              <ChevronRight className="w-3 h-3" /> {x.label}
-                            </Button>
-                          ))}
+                          {/* Pipeline stage moves */}
+                          <div className="flex gap-1">
+                            {stages.filter((x) => x.id !== s.id).map((x) => (
+                              <Button
+                                key={x.id}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-[10px] bg-slate-50 hover:bg-white"
+                                onClick={() => setStatus(b.id, x.id)}
+                              >
+                                → {x.label}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
                       </Card>
                     );
@@ -454,81 +528,101 @@ export default function TransfersPage() {
           </div>
         </TabsContent>
 
-        {/* TAB 2: MONTHLY DRIVER SUMMARY LEDGER */}
+        {/* TAB 2: DRIVER CUTS & PAYOUT LEDGER */}
         <TabsContent value="drivers" className="mt-0">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="bg-white border border-[#C3E7F1] rounded-xl overflow-hidden shadow-xs">
+            <div className="p-4 border-b border-[#C3E7F1] bg-[#F4FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="font-display font-semibold text-slate-900 text-sm">Monthly Driver Payout Ledger & Cost Splits</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Aggregated fees, ₹500 split tracking, and pending balances grouped by driver/person.</p>
+                <h3 className="font-display font-bold text-[#20373B] text-sm">
+                  Driver Cut Settlement Ledger
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Detailed breakdown of duties, agreed driver cuts, settled payments, and pending dues.
+                </p>
               </div>
-              <div className="text-xs text-slate-500 font-semibold font-tabular">
-                {summaryData.drivers.length} Driver(s) Registered
+              <div className="text-xs font-semibold text-[#519CAB]">
+                {summaryData.drivers.length} Driver(s) / Person(s)
               </div>
             </div>
 
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100/70 text-[11px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="text-left px-5 py-3 font-semibold">Driver / Person Name</th>
-                  <th className="text-center px-5 py-3 font-semibold">Transfers Handled</th>
-                  <th className="text-right px-5 py-3 font-semibold">Total Decided Fee</th>
-                  <th className="text-right px-5 py-3 font-semibold">Total Paid Amount</th>
-                  <th className="text-right px-5 py-3 font-semibold">Pending Balance</th>
-                  <th className="text-center px-5 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {summaryData.drivers.map((d) => {
-                  const isSelf = d.driver_name.toLowerCase().includes("owner");
-                  return (
-                    <tr key={d.driver_name} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-slate-900 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#C3E7F1]/30 border border-[#C3E7F1] text-[#20373B] flex items-center justify-center text-xs font-bold">
-                          {d.driver_name.charAt(0)}
-                        </div>
-                        <div>
-                          <div>{d.driver_name}</div>
-                          {isSelf && <span className="text-[10px] text-slate-400 font-normal">Vehicle Owner Self-Drop</span>}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-center font-tabular font-medium text-slate-700">{d.total_transfers}</td>
-                      <td className="px-5 py-3.5 text-right font-tabular font-semibold text-slate-900">{formatInr(d.total_fee)}</td>
-                      <td className="px-5 py-3.5 text-right font-tabular font-semibold text-emerald-600">{formatInr(d.total_paid)}</td>
-                      <td className={`px-5 py-3.5 text-right font-tabular font-semibold ${d.total_pending > 0 ? "text-red-600" : "text-slate-500"}`}>
-                        {formatInr(d.total_pending)}
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        {d.total_pending > 0 ? (
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 font-medium inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Pending ₹{d.total_pending}
-                          </span>
-                        ) : (
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Fully Settled
-                          </span>
-                        )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[#F4FAFC] text-[11px] uppercase tracking-wider text-[#20373B]/70 border-b border-[#C3E7F1]">
+                  <tr>
+                    <th className="text-left px-5 py-3 font-bold">Driver / Person Name</th>
+                    <th className="text-center px-5 py-3 font-bold">Duties Handled</th>
+                    <th className="text-right px-5 py-3 font-bold">Total Agreed Cut</th>
+                    <th className="text-right px-5 py-3 font-bold">Paid to Driver</th>
+                    <th className="text-right px-5 py-3 font-bold">Pending Due</th>
+                    <th className="text-center px-5 py-3 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#C3E7F1]/50">
+                  {summaryData.drivers.map((d) => {
+                    const isSelf = d.driver_name.toLowerCase().includes("owner") || d.is_self;
+                    return (
+                      <tr key={d.driver_name} className="hover:bg-[#C3E7F1]/20 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold text-[#20373B] flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${
+                            isSelf ? "bg-emerald-50 border-emerald-300 text-emerald-800" : "bg-[#C3E7F1]/40 border-[#C3E7F1] text-[#20373B]"
+                          }`}>
+                            {isSelf ? "👤" : "🚕"}
+                          </div>
+                          <div>
+                            <div>{d.driver_name}</div>
+                            {isSelf ? (
+                              <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                100% Kept by Owner · Zero Payout
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                External Driver on Cut Basis
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-center font-tabular font-medium text-slate-700">{d.total_transfers}</td>
+                        <td className="px-5 py-3.5 text-right font-tabular font-bold text-slate-900">{formatInr(d.total_fee)}</td>
+                        <td className="px-5 py-3.5 text-right font-tabular font-bold text-emerald-600">{formatInr(d.total_paid)}</td>
+                        <td className={`px-5 py-3.5 text-right font-tabular font-bold ${d.total_pending > 0 ? "text-amber-900" : "text-slate-500"}`}>
+                          {formatInr(d.total_pending)}
+                        </td>
+                        <td className="px-5 py-3.5 text-center">
+                          {isSelf ? (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> In-House
+                            </span>
+                          ) : d.total_pending > 0 ? (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-300 font-bold inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-amber-700" /> Pending {formatInr(d.total_pending)}
+                            </span>
+                          ) : (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Fully Settled
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {summaryData.drivers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                        No driver transfer records available.
                       </td>
                     </tr>
-                  );
-                })}
-
-                {summaryData.drivers.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
-                      No driver transfer records available.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* CREATE NEW AIRPORT TRANSFER MODAL */}
+      {/* ADD NEW AIRPORT TRANSFER MODAL */}
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-lg max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
               <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
@@ -538,35 +632,37 @@ export default function TransfersPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-sm">
+          <div className="space-y-4 py-2 text-xs">
             {/* Customer info */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Customer Name</Label>
+                <Label className="text-xs font-semibold">Customer Name</Label>
                 <Input
                   value={newForm.customer_name}
                   onChange={(e) => setNewForm({ ...newForm, customer_name: e.target.value })}
                   placeholder="e.g. Vikram Sharma"
+                  className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Contact Phone</Label>
+                <Label className="text-xs font-semibold">Contact Phone</Label>
                 <Input
                   value={newForm.customer_contact}
                   onChange={(e) => setNewForm({ ...newForm, customer_contact: e.target.value })}
                   placeholder="+91 98765 43210"
+                  className="h-9"
                 />
               </div>
             </div>
 
             {/* Select Car */}
             <div className="space-y-1.5">
-              <Label>Select Vehicle / Car</Label>
+              <Label className="text-xs font-semibold">Select Vehicle / Car</Label>
               <Select
                 value={newForm.car_id}
                 onValueChange={(val) => setNewForm({ ...newForm, car_id: val })}
               >
-                <SelectTrigger><SelectValue placeholder="Select a car..." /></SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Select a car..." /></SelectTrigger>
                 <SelectContent>
                   {carsList.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
@@ -583,87 +679,245 @@ export default function TransfersPage() {
             {/* Transfer Type & Date */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Transfer Type</Label>
+                <Label className="text-xs font-semibold">Transfer Type</Label>
                 <Select
                   value={newForm.transfer_type}
-                  onValueChange={(val) => setNewForm({ ...newForm, transfer_type: val })}
+                  onValueChange={(val) => {
+                    const cost = val === "both" ? "2000" : "1000";
+                    setNewForm({
+                      ...newForm,
+                      transfer_type: val,
+                      transfer_cost: cost,
+                      transfer_manoj_share: newForm.transfer_handled_by === "self" ? cost : String(Math.max(0, Number(cost) - Number(newForm.transfer_driver_share || 0))),
+                    });
+                  }}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="airport_drop">Airport Drop (₹1,000)</SelectItem>
-                    <SelectItem value="airport_pickup">Airport Pickup (₹1,000)</SelectItem>
-                    <SelectItem value="both">Both Pickup & Drop (₹2,000)</SelectItem>
+                    <SelectItem value="airport_drop">Airport Drop</SelectItem>
+                    <SelectItem value="airport_pickup">Airport Pickup</SelectItem>
+                    <SelectItem value="both">Both Pickup & Drop</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Transfer Date</Label>
+                <Label className="text-xs font-semibold">Transfer Date</Label>
                 <Input
                   type="date"
                   value={newForm.start_date}
                   onChange={(e) => setNewForm({ ...newForm, start_date: e.target.value, end_date: e.target.value })}
+                  className="h-9"
                 />
               </div>
             </div>
 
-            {/* Flight time & Pickup Point */}
+            {/* Flight details & Pickup Point */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Flight Details / Time</Label>
+                <Label className="text-xs font-semibold">Flight Details / Time</Label>
                 <Input
                   value={newForm.flight_time}
                   onChange={(e) => setNewForm({ ...newForm, flight_time: e.target.value })}
                   placeholder="e.g. 14:30 AI-671"
+                  className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Airport Terminal / Point</Label>
+                <Label className="text-xs font-semibold">Airport Terminal / Point</Label>
                 <Input
                   value={newForm.transfer_pickup_point}
                   onChange={(e) => setNewForm({ ...newForm, transfer_pickup_point: e.target.value })}
-                  placeholder="e.g. MOPA Airport Terminal 1"
+                  placeholder="e.g. MOPA Terminal 1"
+                  className="h-9"
                 />
               </div>
             </div>
 
-            {/* ₹1000 Split Preview Banner */}
-            <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-1.5">
-              <div className="font-bold text-blue-900 flex items-center justify-between">
-                <span>Airport Transfer Standard Split (₹1,000)</span>
-                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">50 / 50</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-slate-700 pt-0.5">
-                <div className="bg-white p-2 rounded border border-blue-100">
-                  <div className="text-[10px] text-slate-400 font-semibold uppercase">Cab Driver Share</div>
-                  <div className="font-bold text-slate-800 text-sm mt-0.5">₹500</div>
-                </div>
-                <div className="bg-white p-2 rounded border border-blue-100">
-                  <div className="text-[10px] text-slate-400 font-semibold uppercase">Manoj Share</div>
-                  <div className="font-bold text-slate-800 text-sm mt-0.5">₹500</div>
-                </div>
+            {/* WHO HANDLES THE TRANSFER? (1-Click Toggle) */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs font-bold text-[#20373B]">Who Handles This Transfer?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cost = Number(newForm.transfer_cost || 1000);
+                    setNewForm({
+                      ...newForm,
+                      transfer_handled_by: "self",
+                      driver_name: "Owner (Self)",
+                      driver_contact: "",
+                      transfer_driver_share: "0",
+                      transfer_manoj_share: String(cost),
+                      transfer_driver_paid: true,
+                    });
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    newForm.transfer_handled_by === "self"
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-400"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold">Owner (Self)</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-medium leading-tight">
+                    100% kept by owner · No driver cut
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cost = Number(newForm.transfer_cost || 1000);
+                    const cut = 400;
+                    setNewForm({
+                      ...newForm,
+                      transfer_handled_by: "driver",
+                      driver_name: newForm.driver_name === "Owner (Self)" ? "" : newForm.driver_name,
+                      transfer_driver_share: String(cut),
+                      transfer_manoj_share: String(Math.max(0, cost - cut)),
+                      transfer_driver_paid: false,
+                    });
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    newForm.transfer_handled_by === "driver"
+                      ? "bg-blue-50 border-blue-500 text-blue-950 font-bold shadow-xs ring-1 ring-blue-400"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Car className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold">Driver on Cut Basis</span>
+                  </div>
+                  <div className="text-[10px] text-blue-700 mt-1 font-medium leading-tight">
+                    Custom cut to driver · Rest to owner
+                  </div>
+                </button>
               </div>
             </div>
 
-            {/* Driver Name & Financials */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-slate-900 font-semibold">Who Drops/Picks Up the Car?</Label>
-                <Input
-                  value={newForm.driver_name}
-                  onChange={(e) => setNewForm({ ...newForm, driver_name: e.target.value })}
-                  placeholder="e.g. Owner (Self) or Driver Suresh"
-                />
+            {/* Total Charge & Cut Inputs */}
+            <div className="p-3.5 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-[#20373B]">Transfer Pricing & Cut Split</Label>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-600">
+                  <span>Total Rate: ₹</span>
+                  <input
+                    type="number"
+                    value={newForm.transfer_cost}
+                    onChange={(e) => {
+                      const cost = Number(e.target.value || 0);
+                      const cut = Number(newForm.transfer_driver_share || 0);
+                      setNewForm({
+                        ...newForm,
+                        transfer_cost: e.target.value,
+                        transfer_manoj_share: String(Math.max(0, cost - cut)),
+                      });
+                    }}
+                    className="w-16 h-6 px-1.5 bg-white border border-[#C3E7F1] rounded text-xs font-bold font-tabular text-[#20373B]"
+                  />
+                </div>
               </div>
+
+              {newForm.transfer_handled_by === "driver" ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-700">Driver / Cab Person Name</Label>
+                      <Input
+                        value={newForm.driver_name === "Owner (Self)" ? "" : newForm.driver_name}
+                        onChange={(e) => setNewForm({ ...newForm, driver_name: e.target.value })}
+                        placeholder="e.g. Suresh / Deepak"
+                        className="h-8 bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-700">Driver WhatsApp Phone</Label>
+                      <Input
+                        value={newForm.driver_contact}
+                        onChange={(e) => setNewForm({ ...newForm, driver_contact: e.target.value })}
+                        placeholder="+91 98221..."
+                        className="h-8 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick cut presets */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-600 font-semibold">
+                      <span>Quick Cut Presets:</span>
+                      <span className="text-amber-800 font-bold">Driver gets ₹{newForm.transfer_driver_share}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {["300", "400", "500", "600"].map((cut) => (
+                        <button
+                          key={cut}
+                          type="button"
+                          onClick={() => {
+                            const cost = Number(newForm.transfer_cost || 1000);
+                            setNewForm({
+                              ...newForm,
+                              transfer_driver_share: cut,
+                              transfer_manoj_share: String(Math.max(0, cost - Number(cut))),
+                            });
+                          }}
+                          className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
+                            newForm.transfer_driver_share === cut
+                              ? "bg-blue-600 text-white border-blue-600 font-bold"
+                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          ₹{cut} Cut
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Cut inputs */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                      <div className="text-[10px] text-amber-800 font-bold uppercase">Driver Cut Amount (₹)</div>
+                      <Input
+                        type="number"
+                        value={newForm.transfer_driver_share}
+                        onChange={(e) => {
+                          const cut = Number(e.target.value || 0);
+                          const cost = Number(newForm.transfer_cost || 1000);
+                          setNewForm({
+                            ...newForm,
+                            transfer_driver_share: e.target.value,
+                            transfer_manoj_share: String(Math.max(0, cost - cut)),
+                          });
+                        }}
+                        className="h-8 font-bold font-tabular text-amber-950 mt-1 text-sm"
+                      />
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                      <div className="text-[10px] text-emerald-800 font-bold uppercase">Manoj / Owner Retains (₹)</div>
+                      <div className="h-8 flex items-center font-bold font-tabular text-emerald-900 text-base mt-1 px-2 bg-emerald-50/50 rounded border border-emerald-100">
+                        {formatInr(newForm.transfer_manoj_share || 0)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-950 text-xs">
+                  ✅ <strong>Full Retention:</strong> 100% of this ₹{newForm.transfer_cost} airport transfer is retained directly by Car Castle / Owner with zero driver payout liability.
+                </div>
+              )}
             </div>
 
             {/* Notes */}
             <div className="space-y-1.5">
-              <Label>Notes (Optional)</Label>
+              <Label className="text-xs font-semibold">Notes (Optional)</Label>
               <Textarea
                 value={newForm.notes}
                 onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })}
-                placeholder="Special pickup instructions or payment notes..."
+                placeholder="Special pickup instructions..."
                 rows={2}
+                className="text-xs"
               />
             </div>
           </div>
@@ -679,124 +933,294 @@ export default function TransfersPage() {
 
       {/* EDIT DRIVER & TRANSFER MODAL */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[96vw] sm:max-w-lg max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#20373B] text-lg font-bold">
               <div className="w-8 h-8 rounded-full bg-[#C3E7F1] flex items-center justify-center text-[#20373B]">
-                <User className="w-4 h-4" />
+                <Edit3 className="w-4 h-4" />
               </div>
-              Edit Driver & Transfer Split
+              Edit Driver & Cut Distribution
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 text-xs">
             {selectedBooking && (
-              <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg text-xs space-y-1 text-slate-600">
-                <div><strong>Customer:</strong> {selectedBooking.customer_name} ({selectedBooking.customer_contact})</div>
-                <div><strong>Car:</strong> {selectedBooking.car_model} · <span className="font-mono">{selectedBooking.car_registration}</span></div>
+              <div className="p-3 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl space-y-1 text-slate-700">
+                <div className="font-bold text-[#20373B] text-sm">{selectedBooking.customer_name} ({selectedBooking.customer_contact})</div>
+                <div className="text-xs">
+                  <strong>Vehicle:</strong> {selectedBooking.car_model} · <span className="font-mono text-[#519CAB] font-semibold">{selectedBooking.car_registration}</span>
+                </div>
               </div>
             )}
 
-            {/* Driver Name */}
-            <div className="space-y-1.5">
-              <Label>Who Dropped / Picked up the Car?</Label>
-              <Input
-                value={form.driver_name}
-                onChange={(e) => setForm({ ...form, driver_name: e.target.value })}
-                placeholder="e.g. Owner (Self), Suresh Driver, Ramesh..."
-              />
-              <p className="text-[11px] text-slate-400">Type "Owner (Self)" if the car owner dropped it, or enter the driver's name.</p>
+            {/* WHO HANDLES THE TRANSFER? (1-Click Toggle) */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-[#20373B]">Who Handles This Transfer?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cost = Number(form.transfer_cost || 1000);
+                    setForm({
+                      ...form,
+                      transfer_handled_by: "self",
+                      driver_name: "Owner (Self)",
+                      driver_contact: "",
+                      transfer_driver_share: "0",
+                      transfer_manoj_share: String(cost),
+                      transfer_driver_paid: true,
+                    });
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    form.transfer_handled_by === "self"
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-400"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold">Owner (Self)</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-700 mt-1 font-medium leading-tight">
+                    100% kept by owner · No driver cut
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cost = Number(form.transfer_cost || 1000);
+                    const cut = 400;
+                    setForm({
+                      ...form,
+                      transfer_handled_by: "driver",
+                      driver_name: form.driver_name === "Owner (Self)" ? "" : form.driver_name,
+                      transfer_driver_share: String(cut),
+                      transfer_manoj_share: String(Math.max(0, cost - cut)),
+                      transfer_driver_paid: false,
+                    });
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    form.transfer_handled_by === "driver"
+                      ? "bg-blue-50 border-blue-500 text-blue-950 font-bold shadow-xs ring-1 ring-blue-400"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Car className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold">Driver on Cut Basis</span>
+                  </div>
+                  <div className="text-[10px] text-blue-700 mt-1 font-medium leading-tight">
+                    Custom cut to driver · Rest to owner
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* ₹1000 Cost Split Tracking */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            {/* Total Charge & Cut Inputs */}
+            <div className="p-3.5 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-bold text-[#20373B]">₹1,000 Transfer Split Tracking</Label>
-                <span className="text-[11px] text-[#519CAB] font-semibold">Total: ₹{form.transfer_cost || 1000}</span>
+                <Label className="text-xs font-bold text-[#20373B]">Transfer Pricing & Cut Split</Label>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-600">
+                  <span>Total Rate: ₹</span>
+                  <input
+                    type="number"
+                    value={form.transfer_cost}
+                    onChange={(e) => {
+                      const cost = Number(e.target.value || 0);
+                      const cut = Number(form.transfer_driver_share || 0);
+                      setForm({
+                        ...form,
+                        transfer_cost: e.target.value,
+                        transfer_manoj_share: String(Math.max(0, cost - cut)),
+                      });
+                    }}
+                    className="w-16 h-6 px-1.5 bg-white border border-[#C3E7F1] rounded text-xs font-bold font-tabular text-[#20373B]"
+                  />
+                </div>
               </div>
 
-              {/* Cab Driver Split */}
-              <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">🚕 Cab Driver Share</div>
-                  <div className="text-[11px] text-slate-500 font-tabular font-medium">₹{form.transfer_driver_share || 500}</div>
-                </div>
-                <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.transfer_driver_paid}
-                    onChange={(e) => setForm({ ...form, transfer_driver_paid: e.target.checked })}
-                    className="w-4 h-4 rounded text-emerald-600"
-                  />
-                  <span className={form.transfer_driver_paid ? "text-emerald-700" : "text-slate-500"}>
-                    {form.transfer_driver_paid ? "Paid" : "Mark Paid"}
-                  </span>
-                </label>
-              </div>
+              {form.transfer_handled_by === "driver" ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-700">Driver / Cab Person Name</Label>
+                      <Input
+                        value={form.driver_name === "Owner (Self)" ? "" : form.driver_name}
+                        onChange={(e) => setForm({ ...form, driver_name: e.target.value })}
+                        placeholder="e.g. Suresh / Deepak"
+                        className="h-8 bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-700">Driver WhatsApp Phone</Label>
+                      <Input
+                        value={form.driver_contact}
+                        onChange={(e) => setForm({ ...form, driver_contact: e.target.value })}
+                        placeholder="+91 98221..."
+                        className="h-8 bg-white"
+                      />
+                    </div>
+                  </div>
 
-              {/* Manoj Split */}
-              <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">💼 Manoj Share</div>
-                  <div className="text-[11px] text-slate-500 font-tabular font-medium">₹{form.transfer_manoj_share || 500}</div>
+                  {/* Quick cut presets */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-600 font-semibold">
+                      <span>Quick Cut Presets:</span>
+                      <span className="text-amber-800 font-bold">Driver gets ₹{form.transfer_driver_share}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {["300", "400", "500", "600"].map((cut) => (
+                        <button
+                          key={cut}
+                          type="button"
+                          onClick={() => {
+                            const cost = Number(form.transfer_cost || 1000);
+                            setForm({
+                              ...form,
+                              transfer_driver_share: cut,
+                              transfer_manoj_share: String(Math.max(0, cost - Number(cut))),
+                            });
+                          }}
+                          className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer ${
+                            form.transfer_driver_share === cut
+                              ? "bg-blue-600 text-white border-blue-600 font-bold"
+                              : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          ₹{cut} Cut
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Cut inputs */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                      <div className="text-[10px] text-amber-800 font-bold uppercase">Driver Cut Amount (₹)</div>
+                      <Input
+                        type="number"
+                        value={form.transfer_driver_share}
+                        onChange={(e) => {
+                          const cut = Number(e.target.value || 0);
+                          const cost = Number(form.transfer_cost || 1000);
+                          setForm({
+                            ...form,
+                            transfer_driver_share: e.target.value,
+                            transfer_manoj_share: String(Math.max(0, cost - cut)),
+                          });
+                        }}
+                        className="h-8 font-bold font-tabular text-amber-950 mt-1 text-sm"
+                      />
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-emerald-200">
+                      <div className="text-[10px] text-emerald-800 font-bold uppercase">Manoj / Owner Retains (₹)</div>
+                      <div className="h-8 flex items-center font-bold font-tabular text-emerald-900 text-base mt-1 px-2 bg-emerald-50/50 rounded border border-emerald-100">
+                        {formatInr(form.transfer_manoj_share || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment settlement switches */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.transfer_driver_paid}
+                        onChange={(e) => setForm({ ...form, transfer_driver_paid: e.target.checked })}
+                        className="w-4 h-4 rounded text-emerald-600"
+                      />
+                      <span className={`text-xs font-bold ${form.transfer_driver_paid ? "text-emerald-700" : "text-slate-600"}`}>
+                        {form.transfer_driver_paid ? "✅ Driver Cut Paid" : "⏳ Driver Cut Pending"}
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.transfer_manoj_paid}
+                        onChange={(e) => setForm({ ...form, transfer_manoj_paid: e.target.checked })}
+                        className="w-4 h-4 rounded text-blue-600"
+                      />
+                      <span className={`text-xs font-bold ${form.transfer_manoj_paid ? "text-blue-700" : "text-slate-600"}`}>
+                        {form.transfer_manoj_paid ? "✅ Manoj Cut Received" : "⏳ Manoj Cut Pending"}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* 1-Click WhatsApp Dispatch Button */}
+                  {selectedBooking && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => sendDriverWhatsApp({
+                        ...selectedBooking,
+                        driver_contact: form.driver_contact,
+                        transfer_driver_share: form.transfer_driver_share,
+                        flight_time: form.flight_time,
+                        transfer_pickup_point: form.transfer_pickup_point,
+                      })}
+                      className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold h-9 text-xs"
+                    >
+                      <MessageSquare className="w-4 h-4 mr-1.5 text-emerald-600" />
+                      Dispatch Duty via WhatsApp to {form.driver_name || "Driver"}
+                    </Button>
+                  )}
                 </div>
-                <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.transfer_manoj_paid}
-                    onChange={(e) => setForm({ ...form, transfer_manoj_paid: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600"
-                  />
-                  <span className={form.transfer_manoj_paid ? "text-blue-700" : "text-slate-500"}>
-                    {form.transfer_manoj_paid ? "Paid" : "Mark Paid"}
-                  </span>
-                </label>
-              </div>
+              ) : (
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-950 text-xs">
+                  ✅ <strong>Full Retention:</strong> Handled by Owner (Self). 100% of the ₹{form.transfer_cost} transfer charge is retained by you with zero driver payout liability.
+                </div>
+              )}
             </div>
 
-            {/* Status & Flight info */}
+            {/* Flight & Pipeline info */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Transfer Pipeline Stage</Label>
-                <Select
-                  value={form.transfer_status}
-                  onValueChange={(val) => setForm({ ...form, transfer_status: val })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="en_route">En Route</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Flight Time</Label>
+                <Label className="text-xs font-semibold">Flight Time / Details</Label>
                 <Input
                   value={form.flight_time}
                   onChange={(e) => setForm({ ...form, flight_time: e.target.value })}
-                  placeholder="e.g. 14:30 AI-671"
+                  placeholder="e.g. 18:30 6E-204"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Airport Terminal / Pickup</Label>
+                <Input
+                  value={form.transfer_pickup_point}
+                  onChange={(e) => setForm({ ...form, transfer_pickup_point: e.target.value })}
+                  placeholder="e.g. MOPA Terminal 1"
+                  className="h-9"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Pickup / Drop Location</Label>
-              <Input
-                value={form.transfer_pickup_point}
-                onChange={(e) => setForm({ ...form, transfer_pickup_point: e.target.value })}
-                placeholder="e.g. MOPA Airport Terminal 1"
-              />
+              <Label className="text-xs font-semibold">Transfer Stage</Label>
+              <Select
+                value={form.transfer_status}
+                onValueChange={(val) => setForm({ ...form, transfer_status: val })}
+              >
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="en_route">En Route</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Driver / Transfer Notes</Label>
+              <Label className="text-xs font-semibold">Notes</Label>
               <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="e.g. ₹500 driver share paid via cash..."
                 rows={2}
+                placeholder="Specific instructions..."
+                className="text-xs"
               />
             </div>
           </div>
@@ -804,7 +1228,7 @@ export default function TransfersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={saveDriverUpdate} disabled={saving} className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold">
-              {saving ? "Saving…" : "Save Details"}
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
