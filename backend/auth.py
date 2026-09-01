@@ -5,12 +5,18 @@ import bcrypt
 from datetime import datetime, timezone, timedelta
 
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = 60 * 24 * 30  # 30 days session persistence
-REFRESH_TOKEN_DAYS = 60
+ACCESS_TOKEN_MINUTES = 60 * 24  # 24-hour access token rotation
+REFRESH_TOKEN_DAYS = 30  # 30-day refresh session
+
+DEFAULT_DEV_SECRET = "carcastle-dev-secret-key-change-in-prod"
 
 
 def get_jwt_secret() -> str:
-    return os.environ.get("JWT_SECRET", "carcastle-dev-secret-key-change-in-prod").strip()
+    secret = os.environ.get("JWT_SECRET", "").strip()
+    if not secret:
+        return DEFAULT_DEV_SECRET
+    return secret
+
 
 
 def hash_password(password: str) -> str:

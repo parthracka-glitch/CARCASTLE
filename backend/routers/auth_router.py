@@ -1,5 +1,6 @@
+import os
 import asyncio
-from fastapi import APIRouter, Response, HTTPException, Depends
+from fastapi import APIRouter, Response, Request, HTTPException, Depends
 from datetime import datetime, timezone
 from models import LoginIn
 from auth import verify_password, create_access_token, create_refresh_token, decode_token
@@ -11,10 +12,29 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days session
 
 
 def _set_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie(key="access_token", value=access, httponly=True,
-                        secure=False, samesite="lax", max_age=COOKIE_MAX_AGE, path="/")
-    response.set_cookie(key="refresh_token", value=refresh, httponly=True,
-                        secure=False, samesite="lax", max_age=COOKIE_MAX_AGE, path="/")
+    env_secure = os.environ.get("SECURE_COOKIES", "").lower() in ["true", "1"]
+    is_prod = os.environ.get("ENVIRONMENT", "").lower() in ["production", "prod"]
+    use_secure = env_secure or is_prod
+    samesite = "none" if use_secure else "lax"
+    
+    response.set_cookie(
+        key="access_token",
+        value=access,
+        httponly=True,
+        secure=use_secure,
+        samesite=samesite,
+        max_age=COOKIE_MAX_AGE,
+        path="/"
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh,
+        httponly=True,
+        secure=use_secure,
+        samesite=samesite,
+        max_age=COOKIE_MAX_AGE,
+        path="/"
+    )
 
 
 @router.post("/login")
@@ -40,7 +60,7 @@ async def login(payload: LoginIn, response: Response):
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
-        "access_token": access,  # also return so clients that can't use cookies still work
+        "access_token": access,
     }
 
 
@@ -65,8 +85,37 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.post("/refresh")
-async def refresh(response: Response):
-    from fastapi import Request
-    # accept refresh via cookie only
-    # deliberate keep simple: reload user via decoded sub
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def refresh(request: Request, response: Response):
+    token = request.cookies.get("refresh_token")
+    if not token:
+        try:
+            body = await request.json()
+            token = body.get("refresh_token")
+        except Exception:
+            token = None
+            
+    if not token:
+        raise HTTPException(status_code=401, detail="Refresh token missing")
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    db = get_db()
+    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    new_access = create_access_token(user["id"], user["email"], user["role"])
+    new_refresh = create_refresh_token(user["id"])
+    _set_cookies(response, new_access, new_refresh)
+
+    return {
+        "access_token": new_access,
+        "token_type": "bearer",
+        "user": user,
+    }
+
