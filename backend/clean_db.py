@@ -42,7 +42,9 @@ async def clean_database():
         "ledger",
         "rate_history",
         "reminders",
-        "activity_logs"
+        "activity_logs",
+        "enquiries",
+        "owner_expenses"
     ]
 
     print("\nCleaning test/demo data collections...")
