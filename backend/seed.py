@@ -391,22 +391,74 @@ async def seed(db):
 
 
 async def create_indexes(db):
+    """Create and enforce database indexes across all collections for data integrity and speed."""
+    # Users
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+
+    # Bookings
     await db.bookings.create_index("id", unique=True)
     await db.bookings.create_index("created_at")
     await db.bookings.create_index("start_date")
+    await db.bookings.create_index("end_date")
+    await db.bookings.create_index("status")
+    await db.bookings.create_index("car_id")
+    await db.bookings.create_index("customer_contact")
+    await db.bookings.create_index("transfer_agent_id")
+    await db.bookings.create_index([("car_id", 1), ("start_date", 1), ("end_date", 1)])
+
+    # Car Owners & Agents
     await db.car_owners.create_index("id", unique=True)
+    await db.car_owners.create_index("contact")
     await db.agents.create_index("id", unique=True)
+    await db.agents.create_index("contact")
+
+    # Cars
     await db.cars.create_index("id", unique=True)
     await db.cars.create_index("registration_no", unique=True)
+    await db.cars.create_index("owner_id")
+    await db.cars.create_index("billing_type")
+
+    # Ledger
     await db.ledger.create_index("id", unique=True)
     await db.ledger.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.ledger.create_index("booking_id")
+    await db.ledger.create_index("status")
+    await db.ledger.create_index("date")
+    await db.ledger.create_index([("booking_id", 1), ("status", 1)])
+
+    # Owner Expenses (Handover expenses & Deductions)
+    await db.owner_expenses.create_index("id", unique=True)
+    await db.owner_expenses.create_index("owner_id")
+    await db.owner_expenses.create_index("car_id")
+    await db.owner_expenses.create_index("booking_id")
+    await db.owner_expenses.create_index("date")
+    await db.owner_expenses.create_index("is_settled")
+    await db.owner_expenses.create_index("category")
+    await db.owner_expenses.create_index("settlement_type")
+    await db.owner_expenses.create_index([("owner_id", 1), ("is_settled", 1)])
+
+    # Reminders
+    await db.reminders.create_index("id", unique=True)
+    await db.reminders.create_index("status")
+    await db.reminders.create_index("due_date")
+    await db.reminders.create_index([("entity_type", 1), ("entity_id", 1)])
+
+    # Activity Logs & Rate History
     await db.activity_logs.create_index("created_at")
+    await db.activity_logs.create_index("admin_id")
+    await db.activity_logs.create_index("action")
+    await db.activity_logs.create_index("target_collection")
+    await db.activity_logs.create_index([("target_collection", 1), ("target_id", 1)])
     await db.rate_history.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.rate_history.create_index("effective_date")
+
+    # Enquiries
     await db.enquiries.create_index("id", unique=True)
     await db.enquiries.create_index("enquiry_date")
     await db.enquiries.create_index("status")
     await db.enquiries.create_index("city")
     await db.enquiries.create_index("car_id")
     await db.enquiries.create_index("car_model")
+    await db.enquiries.create_index("phone")
+    await db.enquiries.create_index([("phone", 1), ("status", 1)])

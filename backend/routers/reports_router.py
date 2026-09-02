@@ -42,13 +42,30 @@ def _fmt_inr(n: float) -> str:
     return f"Rs {s}"
 
 
-async def _gather_report(db, month: Optional[str] = None):
+async def _gather_report(db, month: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
     """
-    Gather complete booking records and payables ledger.
-    If month is 'all' or empty, returns all historical bookings.
+    Gather complete booking records, client metrics, and payables ledger.
+    Supports:
+      - month='3-months' or '90-days' (automatically gathers the last 90 days)
+      - start_date & end_date (custom historical date range, e.g. 2026-06-01 to 2026-09-01)
+      - month='all' (complete all-time history)
+      - month='YYYY-MM' (specific calendar month)
     """
-    is_all_time = not month or month.strip().lower() in ("all", "all-time", "")
-    if is_all_time:
+    from datetime import timedelta
+
+    m_str = (month or "").strip().lower()
+    is_all_time = (not month and not start_date and not end_date) or m_str in ("all", "all-time", "")
+
+    if m_str in ("3-months", "90-days", "last-3-months"):
+        cutoff = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
+        q = {"start_date": {"$gte": cutoff}}
+        period_label = "Last 3 Months (Past 90 Days)"
+        file_label = "last-3-months"
+    elif start_date and end_date:
+        q = {"start_date": {"$gte": start_date, "$lte": end_date}}
+        period_label = f"Custom Period ({start_date} to {end_date})"
+        file_label = f"{start_date}_to_{end_date}"
+    elif is_all_time:
         q = {}
         period_label = "Complete History (All Time)"
         file_label = "all-time"
@@ -129,12 +146,57 @@ async def _gather_report(db, month: Optional[str] = None):
 
     savings = total_net * (savings_pct / 100.0)
 
+    # Aggregate client directory and customer spend metrics
+    clients_dict = {}
+    for b in bookings:
+        c_contact = (b.get("customer_contact") or "").strip()
+        c_name = (b.get("customer_name") or "Unnamed Client").strip()
+        key = c_contact if c_contact else c_name
+        if not key:
+            continue
+        if key not in clients_dict:
+            clients_dict[key] = {
+                "name": c_name,
+                "contact": c_contact or "—",
+                "bookings_count": 0,
+                "total_spent": 0.0,
+                "cars_rented": set(),
+                "first_date": (b.get("start_date") or "")[:10],
+                "latest_date": (b.get("end_date") or b.get("start_date") or "")[:10],
+                "last_status": b.get("status", "completed"),
+                "pickup_locations": set(),
+            }
+        c_rec = clients_dict[key]
+        c_rec["bookings_count"] += 1
+        c_rec["total_spent"] += float(b.get("customer_rate") or 0)
+        c_car = b.get("car_model")
+        if c_car and c_car != "—":
+            c_rec["cars_rented"].add(c_car)
+        loc = b.get("pickup_location")
+        if loc and loc != "—":
+            c_rec["pickup_locations"].add(loc)
+        s_date = (b.get("start_date") or "")[:10]
+        e_date = (b.get("end_date") or "")[:10]
+        if s_date and (not c_rec["first_date"] or s_date < c_rec["first_date"]):
+            c_rec["first_date"] = s_date
+        if (e_date or s_date) and (not c_rec["latest_date"] or (e_date or s_date) > c_rec["latest_date"]):
+            c_rec["latest_date"] = e_date or s_date
+        if b.get("status"):
+            c_rec["last_status"] = b.get("status")
+
+    clients_list = list(clients_dict.values())
+    for c in clients_list:
+        c["cars_display"] = ", ".join(sorted(c["cars_rented"])) if c["cars_rented"] else "Standard Vehicle"
+        c["locations_display"] = ", ".join(sorted(c["pickup_locations"])) if c["pickup_locations"] else "Goa"
+    clients_list.sort(key=lambda x: x["total_spent"], reverse=True)
+
     return {
         "month": month or "all",
         "period_label": period_label,
         "file_label": file_label,
         "is_all_time": is_all_time,
         "bookings": bookings,
+        "clients": clients_list,
         "owners": owners,
         "agents": agents,
         "generated_at": datetime.now().strftime("%d %b %Y, %I:%M %p"),
@@ -155,10 +217,12 @@ async def _gather_report(db, month: Optional[str] = None):
 
 
 @reports_router.get("/monthly.pdf")
-async def monthly_pdf(month: Optional[str] = Query(None, description="YYYY-MM or 'all'"),
+async def monthly_pdf(month: Optional[str] = Query(None, description="YYYY-MM, '3-months', or 'all'"),
+                      start_date: Optional[str] = Query(None, description="YYYY-MM-DD start filter"),
+                      end_date: Optional[str] = Query(None, description="YYYY-MM-DD end filter"),
                       user: dict = Depends(require_super_admin)):
     db = get_db()
-    data = await _gather_report(db, month)
+    data = await _gather_report(db, month, start_date, end_date)
 
     buf = io.BytesIO()
     # Landscape A4 gives generous width for all columns
@@ -330,10 +394,12 @@ async def monthly_pdf(month: Optional[str] = Query(None, description="YYYY-MM or
 
 
 @reports_router.get("/monthly.xlsx")
-async def monthly_xlsx(month: Optional[str] = Query(None, description="YYYY-MM or 'all'"),
+async def monthly_xlsx(month: Optional[str] = Query(None, description="YYYY-MM, '3-months', or 'all'"),
+                       start_date: Optional[str] = Query(None, description="YYYY-MM-DD start filter"),
+                       end_date: Optional[str] = Query(None, description="YYYY-MM-DD end filter"),
                        user: dict = Depends(require_super_admin)):
     db = get_db()
-    data = await _gather_report(db, month)
+    data = await _gather_report(db, month, start_date, end_date)
 
     wb = Workbook()
     header_fill = PatternFill("solid", fgColor="20373B")
@@ -496,6 +562,39 @@ async def monthly_xlsx(month: Optional[str] = Query(None, description="YYYY-MM o
     for col in ("A", "B", "C", "D", "E"):
         ws4.column_dimensions[col].width = 24
 
+    # 5. Clients Directory Master Sheet
+    ws5 = wb.create_sheet("Clients Directory")
+    c_headers = [
+        "Client Name", "Contact Phone", "Total Reservations", "Total Spent (INR)",
+        "Vehicles Driven", "First Rental Date", "Latest Rental Date", "Latest Status", "Common Pickup Locations"
+    ]
+    ws5.append(c_headers)
+    _style_header(ws5, 1)
+    for cl in data["clients"]:
+        ws5.append([
+            cl["name"],
+            cl["contact"],
+            cl["bookings_count"],
+            float(cl["total_spent"]),
+            cl["cars_display"],
+            cl["first_date"] or "—",
+            cl["latest_date"] or "—",
+            str(cl["last_status"]).replace("_", " ").title(),
+            cl.get("locations_display", "Goa"),
+        ])
+        r = ws5.max_row
+        for col_idx in range(1, len(c_headers) + 1):
+            cell = ws5.cell(row=r, column=col_idx)
+            cell.border = thin_border
+            if col_idx in (3, 4):
+                cell.alignment = right
+                if col_idx == 4:
+                    cell.number_format = "#,##0.00"
+    for col in ws5.columns:
+        col_letter = col[0].column_letter
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        ws5.column_dimensions[col_letter].width = max(max_len + 3, 14)
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -503,4 +602,168 @@ async def monthly_xlsx(month: Optional[str] = Query(None, description="YYYY-MM o
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="car-castle-goa-{data["file_label"]}.xlsx"'},
+    )
+
+
+# ---------- Dedicated Clients CRM PDF & Excel Routes ----------
+@reports_router.get("/clients.xlsx")
+async def clients_xlsx(month: Optional[str] = Query(None, description="YYYY-MM, '3-months', or 'all'"),
+                       start_date: Optional[str] = Query(None),
+                       end_date: Optional[str] = Query(None),
+                       user: dict = Depends(require_super_admin)):
+    """Spontaneous Excel download of client directory with CRM metrics."""
+    db = get_db()
+    data = await _gather_report(db, month, start_date, end_date)
+
+    wb = Workbook()
+    header_fill = PatternFill("solid", fgColor="20373B")
+    header_font = Font(color="FFFFFF", bold=True, name="Calibri", size=11)
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+    right = Alignment(horizontal="right", vertical="center")
+    center = Alignment(horizontal="center", vertical="center")
+
+    def _style_header(ws, row):
+        for cell in ws[row]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center
+            cell.border = thin_border
+
+    ws = wb.active
+    ws.title = "Clients Master"
+    ws.append(["CAR CASTLE GOA — CLIENT CRM DIRECTORY"])
+    ws["A1"].font = Font(bold=True, size=16, color="20373B")
+    ws.append([f"Period: {data['period_label']} · Total Clients: {len(data['clients'])}"])
+    ws.append([f"Generated At: {data['generated_at']}"])
+    ws.append([])
+
+    headers = [
+        "Client Name", "Contact Phone", "Total Reservations", "Total Spend (INR)",
+        "Vehicles Driven", "First Rental Date", "Latest Rental Date", "Last Status", "Locations"
+    ]
+    ws.append(headers)
+    _style_header(ws, ws.max_row)
+
+    for cl in data["clients"]:
+        ws.append([
+            cl["name"],
+            cl["contact"],
+            cl["bookings_count"],
+            float(cl["total_spent"]),
+            cl["cars_display"],
+            cl["first_date"] or "—",
+            cl["latest_date"] or "—",
+            str(cl["last_status"]).replace("_", " ").title(),
+            cl.get("locations_display", "Goa"),
+        ])
+        r = ws.max_row
+        for c_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=r, column=c_idx)
+            cell.border = thin_border
+            if c_idx in (3, 4):
+                cell.alignment = right
+                if c_idx == 4:
+                    cell.number_format = "#,##0.00"
+
+    for col in ws.columns:
+        col_letter = col[0].column_letter
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="car-castle-goa-clients-{data["file_label"]}.xlsx"'},
+    )
+
+
+@reports_router.get("/clients.pdf")
+async def clients_pdf(month: Optional[str] = Query(None, description="YYYY-MM, '3-months', or 'all'"),
+                     start_date: Optional[str] = Query(None),
+                     end_date: Optional[str] = Query(None),
+                     user: dict = Depends(require_super_admin)):
+    """Spontaneous PDF download of client directory with CRM metrics."""
+    db = get_db()
+    data = await _gather_report(db, month, start_date, end_date)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        leftMargin=10 * mm,
+        rightMargin=10 * mm,
+        topMargin=12 * mm,
+        bottomMargin=10 * mm,
+    )
+    styles = getSampleStyleSheet()
+    slate900 = colors.HexColor("#20373B")
+    slate700 = colors.HexColor("#2C494E")
+    slate500 = colors.HexColor("#64748B")
+    slate100 = colors.HexColor("#F4FAFC")
+    gold = colors.HexColor("#D97706")
+
+    title_style = ParagraphStyle("ct", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=slate900)
+    sub_style = ParagraphStyle("cs", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=slate500)
+    cell_style = ParagraphStyle("cc", parent=styles["Normal"], fontName="Helvetica", fontSize=7.5, leading=9.5, textColor=slate700)
+    hdr_style = ParagraphStyle("ch", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=slate900)
+
+    story = []
+    story.append(Paragraph("<b>CAR CASTLE GOA</b> — CLIENT DIRECTORY & CRM", title_style))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"Period: <b>{data['period_label']}</b> · Total Active Clients: <b>{len(data['clients'])}</b> · Generated: {data['generated_at']}", sub_style))
+    story.append(Spacer(1, 10))
+
+    c_rows = [[
+        Paragraph("<b>Client Name</b>", hdr_style),
+        Paragraph("<b>Phone</b>", hdr_style),
+        Paragraph("<b>Bookings</b>", hdr_style),
+        Paragraph("<b>Total Spend</b>", hdr_style),
+        Paragraph("<b>Vehicles Driven</b>", hdr_style),
+        Paragraph("<b>First Trip</b>", hdr_style),
+        Paragraph("<b>Latest Trip</b>", hdr_style),
+        Paragraph("<b>Status</b>", hdr_style),
+    ]]
+
+    for cl in data["clients"]:
+        c_rows.append([
+            Paragraph(cl["name"], cell_style),
+            Paragraph(cl["contact"], cell_style),
+            Paragraph(str(cl["bookings_count"]), cell_style),
+            Paragraph(_fmt_inr(cl["total_spent"]), cell_style),
+            Paragraph(cl["cars_display"][:40], cell_style),
+            Paragraph(cl["first_date"] or "—", cell_style),
+            Paragraph(cl["latest_date"] or "—", cell_style),
+            Paragraph(str(cl["last_status"]).replace("_", " ").title(), cell_style),
+        ])
+
+    if len(c_rows) == 1:
+        c_rows.append([Paragraph("No clients found for this period", cell_style)] * 8)
+
+    ct = Table(c_rows, colWidths=[45 * mm, 32 * mm, 18 * mm, 28 * mm, 65 * mm, 25 * mm, 25 * mm, 24 * mm], repeatRows=1)
+    ct.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), slate100),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFCFD")]),
+    ]))
+    story.append(ct)
+    story.append(Spacer(1, 10))
+
+    footer = ParagraphStyle("cf", parent=styles["Normal"], textColor=slate500, fontSize=8, alignment=1)
+    story.append(Paragraph(f"Car Castle Goa · Client Directory Export · {data['period_label']}", footer))
+
+    doc.build(story)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="car-castle-goa-clients-{data["file_label"]}.pdf"'},
     )

@@ -35,6 +35,7 @@ async def send_reminder(db, kind: str, entity: dict, message: str,
         "status": "mock_sent",
     }
     await db.reminders.insert_one(record)
+    record.pop("_id", None)
 
     if ledger_id:
         await db.ledger.update_one(

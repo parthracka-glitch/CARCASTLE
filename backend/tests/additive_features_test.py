@@ -35,12 +35,19 @@ def test_additive_features_e2e():
     token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 1. Fetch available car
+    # 1. Fetch or create available car
     cars_res = session.get(f"{BASE_URL}/api/cars", headers=headers)
     assert cars_res.status_code == 200
     cars = cars_res.json()
-    assert len(cars) > 0
-    car_id = cars[0]["id"]
+    if not cars:
+        owner_r = session.post(f"{BASE_URL}/api/owners", json={"name": "Additive Test Owner", "contact": "+91 91111 22222"}, headers=headers)
+        assert owner_r.status_code == 200
+        owner_id = owner_r.json()["id"]
+        car_r = session.post(f"{BASE_URL}/api/cars", json={"registration_no": "GA-07-ADD-9999", "model": "Creta", "owner_id": owner_id, "default_cost_rate": 2000}, headers=headers)
+        assert car_r.status_code == 200
+        car_id = car_r.json()["id"]
+    else:
+        car_id = cars[0]["id"]
 
     # 2. Create booking with 9AM rule (drop_time 14:00 -> +1 extra day), deposit amount ₹3,000, payment method Online, transfer split
     booking_payload = {

@@ -73,6 +73,14 @@ agenthub/agents/youtube/db
 *.deb
 *.dylib
 
+# Backups and data dumps
+backend/backups/
+backups/
+*.json.gz
+
+# Unrelated files
+VILLA_BROKER_DASHBOARD_GUIDE.md
+
 # Build caches
 .cache/
 
