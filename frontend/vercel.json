@@ -2,13 +2,14 @@
   "version": 2,
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
-  "routes": [
+  "rewrites": [
     {
-      "handle": "filesystem"
+      "source": "/api/:match*",
+      "destination": "https://carcastle.onrender.com/api/:match*"
     },
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -1,12 +1,16 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const BACKEND_URL =
+  process.env.REACT_APP_BACKEND_URL ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+    ? "https://carcastle.onrender.com"
+    : "");
 export const API = BACKEND_URL ? (BACKEND_URL.endsWith("/") ? `${BACKEND_URL}api` : `${BACKEND_URL}/api`) : "/api";
 
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,
-  timeout: 10000,
+  timeout: 15000,
 });
 
 // Attach bearer token if we have one (fallback path when cookies blocked)
