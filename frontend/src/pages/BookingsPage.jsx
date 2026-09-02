@@ -162,7 +162,7 @@ export default function BookingsPage() {
         daily_cost_rate: dailyCost,
         daily_customer_rate: dailyCustomer,
         cost_rate: totalCost,
-        customer_rate: totalCustomer,
+        customer_rate: totalCarCustomer,
         pickup_location: form.pickup_location || "",
         pickup_price: pPrice,
         drop_location: form.drop_location || "",
@@ -957,9 +957,9 @@ export default function BookingsPage() {
                   return (
                     <div className="grid grid-cols-3 gap-2 text-center p-2.5 rounded-lg bg-[#20373B]/5 border border-[#C3E7F1]/50 text-xs">
                       <div>
-                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer Sales</div>
-                        <div className="font-bold font-tabular text-[#20373B] text-sm">{formatInr(b.customer_rate)}</div>
-                        {bDays > 1 && <div className="text-[10px] text-slate-400 font-tabular">₹{Math.round(dCust)}/d</div>}
+                        <div className="text-[9px] uppercase tracking-wider text-slate-500">Customer Bill</div>
+                        <div className="font-bold font-tabular text-[#20373B] text-sm">{formatInr(Number(b.customer_rate || 0) + Number(b.transfer_cost || 0))}</div>
+                        <div className="text-[10px] text-slate-400 font-tabular">Car {formatInr(b.customer_rate)}{Number(b.transfer_cost || 0) > 0 ? ` + 📍 ₹${b.transfer_cost}` : ""}</div>
                       </div>
                       {!isOp && (
                         <div>
@@ -1150,9 +1150,11 @@ export default function BookingsPage() {
                         {bDays > 1 && <div className="text-[10px] text-slate-400">₹{Math.round(dCost)}/day</div>}
                       </td>
                     )}
-                    <td className="px-5 py-2.5 text-right font-tabular font-bold text-slate-900">
-                      {formatInr(b.customer_rate)}
-                      {bDays > 1 && <div className="text-[10px] text-slate-400 font-normal">₹{Math.round(dCust)}/day</div>}
+                    <td className="px-5 py-2.5 text-right font-tabular">
+                      <div className="font-bold text-slate-900">{formatInr(Number(b.customer_rate || 0) + Number(b.transfer_cost || 0))}</div>
+                      <div className="text-[10px] text-slate-400 font-normal">
+                        Car {formatInr(b.customer_rate)}{Number(b.transfer_cost || 0) > 0 ? ` + 📍 ₹${b.transfer_cost}` : ""}
+                      </div>
                     </td>
                     {!isOp && (
                       <td className="px-5 py-2.5 text-right font-tabular font-extrabold text-emerald-700">

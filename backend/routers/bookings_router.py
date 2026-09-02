@@ -195,16 +195,22 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     cost_rate = float(payload.cost_rate)
     customer_rate = float(payload.customer_rate)
 
-    # If daily rates provided, ensure total rates match daily_rate * days
-    if daily_cost > 0 and (cost_rate == daily_cost or cost_rate == 0):
+    if daily_cost > 0:
         cost_rate = daily_cost * days
-    elif cost_rate > 0 and daily_cost == 0:
-        daily_cost = cost_rate / days
+    else:
+        cost_rate = float(payload.cost_rate or 0)
 
-    if daily_customer > 0 and (customer_rate == daily_customer or customer_rate == 0):
+    if daily_customer > 0:
         customer_rate = daily_customer * days
-    elif customer_rate > 0 and daily_customer == 0:
-        daily_customer = customer_rate / days
+    else:
+        customer_rate = float(payload.customer_rate or 0)
+
+    # Check if incoming customer_rate accidentally had pickup/drop price included
+    incoming_loc_price = float(payload.pickup_price or 0.0) + float(payload.drop_price or 0.0)
+    if incoming_loc_price > 0 and daily_customer > 0:
+        customer_rate = daily_customer * days
+    elif incoming_loc_price > 0 and customer_rate > incoming_loc_price and payload.customer_rate == (customer_rate + incoming_loc_price):
+        customer_rate = customer_rate - incoming_loc_price
 
     agent_fee = float(payload.agent_fee or 0)
     car_profit = customer_rate - cost_rate
@@ -293,11 +299,11 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
             transfer_driver_cut = d_share
             transfer_profit = max(0.0, transfer_cost - transfer_driver_cut)
 
-    # Net Profit = Total Booking + Airport Amount - Owner Rent - Driver Pickup Cut - Agent Fee
-    #            = Car Profit + Cab Pickup Profit - Agent Fee
-    margin = (customer_rate + transfer_cost) - cost_rate - transfer_driver_cut
+    # Margin = Car Profit + Transfer Profit
+    margin = car_profit + transfer_profit
     net_profit = margin - agent_fee
 
+    booking_dict["customer_rate"] = customer_rate
     booking_dict["car_profit"] = car_profit
     booking_dict["transfer_profit"] = transfer_profit
 

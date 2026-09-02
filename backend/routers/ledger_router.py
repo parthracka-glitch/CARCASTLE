@@ -129,12 +129,30 @@ def _month_key(iso_str: str) -> str:
 
 
 def compute_booking_financials(b: dict) -> dict:
-    car_income = float(b.get("customer_rate") or 0.0)
     has_transfer = bool(b.get("transfer_type") and b.get("transfer_type") != "none")
     transfer_income = float(b.get("transfer_cost") or 0.0) if has_transfer else 0.0
+
+    daily_cust = float(b.get("daily_customer_rate") or 0.0)
+    days = int(b.get("days") or 1)
+    raw_cust_rate = float(b.get("customer_rate") or 0.0)
+
+    # Car Income: strictly car rental duration (daily_rate * days)
+    if daily_cust > 0 and days > 0:
+        car_income = daily_cust * days
+    elif transfer_income > 0 and raw_cust_rate > transfer_income and (b.get("pickup_price") is not None or b.get("drop_price") is not None):
+        car_income = raw_cust_rate - transfer_income
+    else:
+        car_income = raw_cust_rate
+
+    # Total Income is car income + airport pickup/drop charges
     total_income = car_income + transfer_income
 
-    owner_cost = float(b.get("cost_rate") or 0.0)
+    daily_cost = float(b.get("daily_cost_rate") or 0.0)
+    raw_cost_rate = float(b.get("cost_rate") or 0.0)
+    if daily_cost > 0 and days > 0:
+        owner_cost = daily_cost * days
+    else:
+        owner_cost = raw_cost_rate
 
     driver_paid = 0.0
     if has_transfer:
