@@ -127,6 +127,28 @@ function DutyItemCard({ booking, dutyType, openEdit, sendDriverWhatsApp, toggleS
         </div>
       </div>
 
+      {/* Handover Collection Badge (for Handover / Delivery duties) */}
+      {isPickup && (() => {
+        const totalBill = Number(booking.customer_rate || 0) + Number(booking.transfer_cost || 0);
+        const adv = Number(booking.advance_payment || 0);
+        const rentDue = booking.balance_due !== undefined && booking.balance_due !== null ? Number(booking.balance_due) : Math.max(0, totalBill - adv);
+        const dep = Number(booking.deposit_amount || 0);
+        const handoverTotal = rentDue + (booking.deposit_status !== "refunded" ? dep : 0);
+        if (handoverTotal <= 0) return null;
+
+        return (
+          <div className="p-2 rounded-lg bg-[#20373B] text-white flex items-center justify-between text-xs shadow-xs">
+            <span className="font-bold text-[11px] text-[#FFC64F] flex items-center gap-1">
+              <span>🤝</span> Collect on Delivery:
+            </span>
+            <span className="font-extrabold text-[#FFC64F] text-xs font-tabular">
+              {formatInr(handoverTotal)}
+              {dep > 0 && <span className="text-[10px] text-slate-300 font-normal ml-1">({formatInr(rentDue)} rent + {formatInr(dep)} dep)</span>}
+            </span>
+          </div>
+        );
+      })()}
+
       {/* Driver Handling & Cut */}
       {isSelf ? (
         <div className="p-2 rounded-lg bg-emerald-50/90 border border-emerald-200 flex items-center justify-between text-xs">
@@ -291,6 +313,20 @@ export default function TransfersPage() {
       : "";
     const cutAmt = formatInr(b.transfer_driver_share || 400);
 
+    const isDelivery = isPickup || isBoth;
+    const totalBill = Number(b.customer_rate || 0) + Number(b.transfer_cost || 0);
+    const adv = Number(b.advance_payment || 0);
+    const rentDue = b.balance_due !== undefined && b.balance_due !== null ? Number(b.balance_due) : Math.max(0, totalBill - adv);
+    const dep = Number(b.deposit_amount || 0);
+    const handoverTotal = rentDue + (b.deposit_status !== "refunded" ? dep : 0);
+
+    const collectionText = (isDelivery && handoverTotal > 0)
+      ? `------------------------------------\n` +
+        `💵 *COLLECT FROM CUSTOMER ON DELIVERY:* ${formatInr(handoverTotal)}\n` +
+        `   • Rental Balance Due: ${formatInr(rentDue)}\n` +
+        `   • Refundable Security Deposit: ${formatInr(dep)}\n`
+      : "";
+
     const text =
       `🌴 *CAR CASTLE GOA — AIRPORT TRANSFER DUTY*\n` +
       `🚗 *Duty Type:* ${tType}\n` +
@@ -300,6 +336,7 @@ export default function TransfersPage() {
       `📍 *Drop Destination:* ${b.drop_location || "Goa"}\n` +
       `👤 *Passenger:* ${b.customer_name} (${b.customer_contact || "No phone"})\n` +
       `🚘 *Vehicle:* ${b.car_model || "Car"} (${b.car_registration || "Fleet"})\n` +
+      `${collectionText}` +
       `------------------------------------\n` +
       `💰 *Agreed Cut for Driver:* ${cutAmt}\n` +
       `Please coordinate with the passenger and reach 15 minutes before flight arrival. Safe driving! 🚕✨`;

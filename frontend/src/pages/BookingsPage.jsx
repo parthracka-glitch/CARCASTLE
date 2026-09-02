@@ -846,6 +846,28 @@ export default function BookingsPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* 🤝 Total to Collect on Delivery / Handover (Driver Collection Direct Figure) */}
+                {Number(form.deposit_amount || 0) > 0 && (
+                  <div className="p-3 rounded-xl bg-[#20373B] text-white border border-[#20373B] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs mt-2">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-[#FFC64F] tracking-wider flex items-center gap-1">
+                        <span>🤝</span> Total to Collect on Delivery (Direct Amount)
+                      </div>
+                      <div className="text-[11px] text-slate-300 mt-0.5">
+                        Tell driver to collect this exact total: {formatInr(computedBalanceDue)} Rent Due + {formatInr(Number(form.deposit_amount || 0))} Refundable Deposit
+                      </div>
+                    </div>
+                    <div className="text-right sm:text-right shrink-0">
+                      <div className="font-display font-extrabold text-xl text-[#FFC64F] font-tabular">
+                        {formatInr(computedBalanceDue + Number(form.deposit_amount || 0))}
+                      </div>
+                      <div className="text-[10px] text-slate-300">
+                        {form.payment_method === "cash" ? "Cash Collection" : "Online / UPI Collection"}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="sm:col-span-2">
@@ -1043,21 +1065,37 @@ export default function BookingsPage() {
                   const totalBill = Number(b.customer_rate || 0) + Number(b.transfer_cost || 0);
                   const adv = Number(b.advance_payment || 0);
                   const due = b.balance_due !== undefined && b.balance_due !== null ? Number(b.balance_due) : Math.max(0, totalBill - adv);
+                  const dep = Number(b.deposit_amount || 0);
+                  const handoverTotal = due + (b.deposit_status !== "refunded" ? dep : 0);
                   if (totalBill <= 0) return null;
 
                   return (
-                    <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md border text-xs ${
-                      due <= 0 ? "bg-emerald-50/70 border-emerald-200 text-emerald-950" : "bg-amber-50/70 border-amber-200 text-amber-950"
-                    }`}>
-                      <span className="flex items-center gap-1 font-medium">
-                        <span>💵</span>
-                        <span>Advance: <strong>{formatInr(adv)}</strong></span>
-                      </span>
-                      <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                        due <= 0 ? "bg-emerald-200 text-emerald-900" : "bg-amber-200 text-amber-900"
+                    <div className="space-y-1.5">
+                      <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md border text-xs ${
+                        due <= 0 ? "bg-emerald-50/70 border-emerald-200 text-emerald-950" : "bg-amber-50/70 border-amber-200 text-amber-950"
                       }`}>
-                        {due <= 0 ? "Paid in Full" : `Due: ${formatInr(due)}`}
-                      </span>
+                        <span className="flex items-center gap-1 font-medium">
+                          <span>💵</span>
+                          <span>Advance: <strong>{formatInr(adv)}</strong></span>
+                        </span>
+                        <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                          due <= 0 ? "bg-emerald-200 text-emerald-900" : "bg-amber-200 text-amber-900"
+                        }`}>
+                          {due <= 0 ? "Paid in Full" : `Rent Due: ${formatInr(due)}`}
+                        </span>
+                      </div>
+
+                      {/* Direct Handover Collection Banner */}
+                      {handoverTotal > 0 && (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#20373B] text-white text-[11px] font-medium shadow-2xs">
+                          <span className="flex items-center gap-1 text-[#FFC64F] font-bold">
+                            <span>🤝</span> Collect on Delivery:
+                          </span>
+                          <span className="font-extrabold font-tabular text-[#FFC64F] text-xs">
+                            {formatInr(handoverTotal)} {dep > 0 && <span className="text-[10px] font-normal text-slate-300">({formatInr(due)} + {formatInr(dep)} dep)</span>}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -1233,9 +1271,16 @@ export default function BookingsPage() {
                           return (
                             <div>
                               {due > 0 ? (
-                                <span className="inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                                  Due: {formatInr(due)}
-                                </span>
+                                <div className="space-y-0.5">
+                                  <span className="inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                    Rent Due: {formatInr(due)}
+                                  </span>
+                                  {depAmt > 0 && b.deposit_status !== "refunded" && (
+                                    <div className="text-[10px] font-bold text-slate-700">
+                                      🤝 Handover: <strong className="text-[#20373B]">{formatInr(due + depAmt)}</strong>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                                   Paid in Full
