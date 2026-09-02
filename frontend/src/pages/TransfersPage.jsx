@@ -75,7 +75,7 @@ function DutyItemCard({ booking, dutyType, openEdit, sendDriverWhatsApp, toggleS
                   : "bg-amber-50 text-amber-800 border border-amber-200"
               }`}
             >
-              {isPickup ? "🛫 Pickup" : "🛬 Drop"}
+              {isPickup ? "🚗 Handover (Give Car)" : "🔄 Return (Collect Car)"}
             </span>
           </div>
           <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
@@ -646,7 +646,7 @@ export default function TransfersPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="bg-white border border-[#C3E7F1] p-1 h-auto flex flex-wrap gap-1 rounded-xl shadow-xs">
           <TabsTrigger value="calendar" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
-            📅 Pickups & Drops Calendar (Split Daily View)
+            📅 Handovers & Returns Calendar (Daily Operations)
           </TabsTrigger>
           <TabsTrigger value="kanban" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
             📋 Transfer Board (Kanban)
@@ -811,11 +811,11 @@ export default function TransfersPage() {
                               ? "bg-emerald-500/30 text-emerald-200 border border-emerald-400/40"
                               : "bg-emerald-50 text-emerald-800 border border-emerald-200"
                           }`}
-                          title={`${dayPickupsCount} Airport Pickup${dayPickupsCount > 1 ? "s" : ""}`}
+                          title={`${dayPickupsCount} Car Handover${dayPickupsCount > 1 ? "s" : ""} (Giving car)`}
                         >
-                          <span>🛫</span>
+                          <span>🚗</span>
                           <span>{dayPickupsCount}</span>
-                          <span className="hidden sm:inline">Pick</span>
+                          <span className="hidden sm:inline">Handover</span>
                         </div>
                       )}
                       {dayDropsCount > 0 && (
@@ -825,11 +825,11 @@ export default function TransfersPage() {
                               ? "bg-amber-500/30 text-amber-200 border border-amber-400/40"
                               : "bg-amber-50 text-amber-800 border border-amber-200"
                           }`}
-                          title={`${dayDropsCount} Airport Drop${dayDropsCount > 1 ? "s" : ""}`}
+                          title={`${dayDropsCount} Car Return${dayDropsCount > 1 ? "s" : ""} (Collecting car)`}
                         >
-                          <span>🛬</span>
+                          <span>🔄</span>
                           <span>{dayDropsCount}</span>
-                          <span className="hidden sm:inline">Drop</span>
+                          <span className="hidden sm:inline">Return</span>
                         </div>
                       )}
                     </div>
@@ -870,12 +870,12 @@ export default function TransfersPage() {
             {/* Quick Metrics */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <div className="bg-white border border-emerald-200 px-3 py-1.5 rounded-xl shadow-2xs">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Pickups</span>
-                <span className="font-bold text-emerald-800 text-sm">{selectedPickups.length} Trips</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Handovers (Give Car)</span>
+                <span className="font-bold text-emerald-800 text-sm">{selectedPickups.length} Handover{selectedPickups.length !== 1 ? "s" : ""}</span>
               </div>
               <div className="bg-white border border-amber-200 px-3 py-1.5 rounded-xl shadow-2xs">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Drops</span>
-                <span className="font-bold text-amber-800 text-sm">{selectedDrops.length} Trips</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Returns (Collect Car)</span>
+                <span className="font-bold text-amber-800 text-sm">{selectedDrops.length} Return{selectedDrops.length !== 1 ? "s" : ""}</span>
               </div>
               <div className="bg-white border border-[#C3E7F1] px-3 py-1.5 rounded-xl shadow-2xs">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Day Collections</span>
@@ -884,25 +884,25 @@ export default function TransfersPage() {
             </div>
           </div>
 
-          {/* SPLIT TWO-HALVES VIEW: Pickups (Left) vs Drops (Right) */}
+          {/* SPLIT TWO-HALVES VIEW: Handovers (Left) vs Returns (Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* FIRST HALF: 🛫 AIRPORT PICKUPS */}
+            {/* FIRST HALF: 🚗 CAR HANDOVERS / GIVING CAR TO CLIENT */}
             <div className="bg-white border-2 border-emerald-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-emerald-100">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold text-base">
-                    🛫
+                    🚗
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-display font-bold text-base text-[#20373B]">Airport Pickups</h3>
+                      <h3 className="font-display font-bold text-base text-[#20373B]">Car Handovers (Give Car)</h3>
                       <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                         {selectedPickups.length}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Revenue: {formatInr(pickupsRevenue)} · Driver Cuts: {formatInr(pickupsDriverCut)}
+                      Giving car to client (Start of trip) · Revenue: {formatInr(pickupsRevenue)}
                     </p>
                   </div>
                 </div>
@@ -912,7 +912,7 @@ export default function TransfersPage() {
                   onClick={() => openNewForDate(selectedDate, "airport_pickup")}
                   className="h-8 px-2.5 text-xs font-bold bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] shadow-xs"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Pickup
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Handover
                 </Button>
               </div>
 
@@ -932,12 +932,12 @@ export default function TransfersPage() {
 
                 {selectedPickups.length === 0 && (
                   <div className="p-8 text-center bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1] space-y-2 my-auto">
-                    <div className="text-3xl">🛫</div>
+                    <div className="text-3xl">🚗</div>
                     <div className="font-bold text-xs text-[#20373B]">
-                      No Airport Pickups on {formatDate(selectedDate)}
+                      No Car Handovers on {formatDate(selectedDate)}
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                      No incoming airport pickups scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
+                      No car deliveries / handovers scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
                     </p>
                     <Button
                       size="sm"
@@ -945,30 +945,30 @@ export default function TransfersPage() {
                       onClick={() => openNewForDate(selectedDate, "airport_pickup")}
                       className="text-xs text-[#519CAB] border-[#C3E7F1] hover:bg-white"
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Pickup
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Handover
                     </Button>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* SECOND HALF: 🛬 AIRPORT DROPS */}
+            {/* SECOND HALF: 🔄 CAR RETURNS / COLLECTING CAR FROM CLIENT */}
             <div className="bg-white border-2 border-amber-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-amber-100">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center font-bold text-base">
-                    🛬
+                    🔄
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-display font-bold text-base text-[#20373B]">Airport Drops</h3>
+                      <h3 className="font-display font-bold text-base text-[#20373B]">Car Returns (Collect Car)</h3>
                       <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
                         {selectedDrops.length}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Revenue: {formatInr(dropsRevenue)} · Driver Cuts: {formatInr(dropsDriverCut)}
+                      Collecting car back (End of trip) · Revenue: {formatInr(dropsRevenue)}
                     </p>
                   </div>
                 </div>
@@ -978,7 +978,7 @@ export default function TransfersPage() {
                   onClick={() => openNewForDate(selectedDate, "airport_drop")}
                   className="h-8 px-2.5 text-xs font-bold bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] shadow-xs"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Drop
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Return
                 </Button>
               </div>
 
@@ -998,12 +998,12 @@ export default function TransfersPage() {
 
                 {selectedDrops.length === 0 && (
                   <div className="p-8 text-center bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1] space-y-2 my-auto">
-                    <div className="text-3xl">🛬</div>
+                    <div className="text-3xl">🔄</div>
                     <div className="font-bold text-xs text-[#20373B]">
-                      No Airport Drops on {formatDate(selectedDate)}
+                      No Car Returns on {formatDate(selectedDate)}
                     </div>
                     <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                      No outgoing airport drops scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
+                      No car returns / collections scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
                     </p>
                     <Button
                       size="sm"
@@ -1011,7 +1011,7 @@ export default function TransfersPage() {
                       onClick={() => openNewForDate(selectedDate, "airport_drop")}
                       className="text-xs text-[#519CAB] border-[#C3E7F1] hover:bg-white"
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Drop
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Return
                     </Button>
                   </div>
                 )}
