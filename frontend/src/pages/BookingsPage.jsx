@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download, Fuel, Droplets } from "lucide-react";
+import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download, Fuel, Droplets, Plane } from "lucide-react";
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
@@ -399,9 +399,6 @@ export default function BookingsPage() {
               <Field label="Customer contact">
                 <Input value={form.customer_contact} onChange={(e) => setForm({ ...form, customer_contact: e.target.value })} data-testid="booking-customer-contact" placeholder="+91 98765 43210" />
               </Field>
-              <Field label="ID proof">
-                <Input value={form.customer_id_proof} onChange={(e) => setForm({ ...form, customer_id_proof: e.target.value })} placeholder="Aadhaar/DL last 4" />
-              </Field>
               {/* Vehicle & Owner Selection */}
               <div className="sm:col-span-2 space-y-2.5 border border-[#C3E7F1] rounded-xl p-3 bg-[#F4FAFC]">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -500,22 +497,12 @@ export default function BookingsPage() {
                       />
                     </div>
 
-                    <div>
-                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Car Number / Plate (Optional)</Label>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Owner Serial No / Contact</Label>
                       <Input
-                        placeholder="TBD (or GA-03-XX-XXXX if known)"
-                        value={form.car_registration}
-                        onChange={(e) => setForm({ ...form, car_registration: e.target.value })}
-                        className="text-xs bg-white"
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="text-xs font-medium text-slate-600 mb-1 block">Owner Phone (Optional)</Label>
-                      <Input
-                        placeholder="+91 98765 43210"
+                        placeholder="Owner Phone / Serial No (e.g. +91 98765 43210)"
                         value={form.owner_contact}
-                        onChange={(e) => setForm({ ...form, owner_contact: e.target.value })}
+                        onChange={(e) => setForm({ ...form, owner_contact: e.target.value, car_registration: form.car_registration || "TBD" })}
                         className="text-xs bg-white"
                       />
                     </div>
