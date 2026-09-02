@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import AppLayout from "@/components/AppLayout";
 import StatusPill from "@/components/StatusPill";
 import { api, formatInr, formatDate, formatApiError } from "@/lib/api";
@@ -17,9 +17,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  Plane, ChevronRight, User, Edit3, IndianRupee, Car, CheckCircle2,
+  Plane, ChevronRight, ChevronLeft, User, Edit3, IndianRupee, Car, CheckCircle2,
   Clock, HelpCircle, Users, Calendar, Plus, MessageSquare, Phone,
-  ExternalLink, Check, ShieldCheck, Tag
+  ExternalLink, Check, ShieldCheck, Tag, Search, Filter, CalendarDays
 } from "lucide-react";
 
 const stages = [
@@ -54,10 +54,183 @@ const newTransferEmpty = {
   notes: "",
 };
 
+// Reusable card for the Calendar Split View (Pickups vs Drops)
+function DutyItemCard({ booking, dutyType, openEdit, sendDriverWhatsApp, toggleSplitPayment, setStatus }) {
+  const isSelf = booking.transfer_handled_by === "self" || booking.driver_name === "Owner (Self)";
+  const tCost = Number(booking.transfer_cost || 1000);
+  const dCut = Number(booking.transfer_driver_share || 400);
+  const isPickup = dutyType === "pickup";
+
+  return (
+    <Card className="p-3.5 bg-white border border-[#C3E7F1] shadow-2xs rounded-xl hover:border-[#519CAB] transition-all space-y-2.5">
+      {/* Passenger & Vehicle header */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-[#20373B] text-sm truncate flex items-center gap-1.5">
+            <span>{booking.customer_name}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                isPickup
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : "bg-amber-50 text-amber-800 border border-amber-200"
+              }`}
+            >
+              {isPickup ? "🛫 Pickup" : "🛬 Drop"}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+            <a
+              href={`tel:${booking.customer_contact}`}
+              className="flex items-center gap-1 hover:text-[#519CAB] font-semibold text-slate-600"
+            >
+              <Phone className="w-3 h-3 text-[#519CAB]" />
+              <span>{booking.customer_contact || "No phone"}</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Car badge */}
+        <div className="text-right shrink-0">
+          <div className="font-mono text-xs font-bold text-[#20373B] bg-[#F4FAFC] border border-[#C3E7F1] px-2 py-0.5 rounded-md">
+            {booking.car_registration || "Fleet"}
+          </div>
+          <div className="text-[10px] text-slate-400 truncate max-w-[120px] font-medium mt-0.5">
+            {booking.car_model || "Car"}
+          </div>
+        </div>
+      </div>
+
+      {/* Flight & Route */}
+      <div className="p-2.5 rounded-lg bg-[#F4FAFC] border border-[#C3E7F1]/60 text-xs space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-slate-700 flex items-center gap-1">
+            <Plane className="w-3.5 h-3.5 text-[#519CAB]" />
+            {booking.flight_time ? `Flight: ${booking.flight_time}` : `Time: ${booking.pickup_time || "14:30"}`}
+          </span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[#20373B]">
+            {booking.transfer_status?.replace("_", " ") || "scheduled"}
+          </span>
+        </div>
+
+        <div className="text-[11px] text-slate-600 flex items-start gap-1">
+          <span className="text-slate-400 shrink-0 font-bold">{isPickup ? "Pickup Terminal:" : "Pickup Hotel:"}</span>
+          <span className="truncate font-medium text-slate-800">
+            {booking.transfer_pickup_point || booking.pickup_location || (isPickup ? "MOPA Airport Terminal 1" : "Hotel")}
+          </span>
+        </div>
+
+        <div className="text-[11px] text-slate-600 flex items-start gap-1">
+          <span className="text-slate-400 shrink-0 font-bold">{isPickup ? "Drop Destination:" : "Airport Terminal:"}</span>
+          <span className="truncate font-medium text-slate-800">
+            {booking.drop_location || (isPickup ? "Hotel / Villa" : "Airport Terminal")}
+          </span>
+        </div>
+      </div>
+
+      {/* Driver Handling & Cut */}
+      {isSelf ? (
+        <div className="p-2 rounded-lg bg-emerald-50/90 border border-emerald-200 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-[11px]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>Owner Self-Handled</span>
+          </div>
+          <span className="text-[10px] font-extrabold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200 font-tabular shrink-0">
+            100% Kept: {formatInr(tCost)}
+          </span>
+        </div>
+      ) : (
+        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-bold text-[#20373B] flex items-center gap-1">
+              <Car className="w-3 h-3 text-[#519CAB]" />
+              {booking.driver_name || "Driver"}
+              {booking.driver_contact && <span className="text-[10px] text-slate-400">({booking.driver_contact})</span>}
+            </span>
+            <span className="font-tabular font-bold text-[#20373B] text-xs">{formatInr(tCost)} Total</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => toggleSplitPayment(booking, "transfer_driver_paid", booking.transfer_driver_paid)}
+              className={`py-1 px-1.5 rounded text-[10px] font-bold border transition-colors cursor-pointer text-center ${
+                booking.transfer_driver_paid
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                  : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+              }`}
+            >
+              {booking.transfer_driver_paid ? "✅ Driver Cut Paid" : `⏳ Pay Driver: ${formatInr(dCut)}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleSplitPayment(booking, "transfer_manoj_paid", booking.transfer_manoj_paid)}
+              className={`py-1 px-1.5 rounded text-[10px] font-bold border transition-colors cursor-pointer text-center ${
+                booking.transfer_manoj_paid
+                  ? "bg-blue-50 text-blue-800 border-blue-300"
+                  : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+              }`}
+            >
+              {booking.transfer_manoj_paid ? "✅ Profit Kept" : `⏳ Profit: ${formatInr(booking.transfer_manoj_share || Math.max(0, tCost - dCut))}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action Footer */}
+      <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100 text-xs">
+        <div className="flex items-center gap-1">
+          {!isSelf && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => sendDriverWhatsApp(booking)}
+              className="h-7 px-2 text-[10px] font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 shrink-0"
+              title="Send duty details to driver via WhatsApp"
+            >
+              <MessageSquare className="w-3 h-3 mr-1 text-emerald-600" /> WhatsApp
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => openEdit(booking)}
+            className="h-7 px-2 text-[10px] text-[#519CAB] hover:bg-[#C3E7F1]/30 font-semibold"
+          >
+            <Edit3 className="w-3 h-3 mr-1" /> Edit
+          </Button>
+        </div>
+
+        {/* Quick status cycle */}
+        <div className="flex items-center gap-1">
+          {booking.transfer_status !== "completed" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setStatus(booking.id, booking.transfer_status === "scheduled" ? "en_route" : "completed")}
+              className="h-7 px-2 text-[10px] font-bold bg-[#F4FAFC] hover:bg-white text-[#20373B] border-[#C3E7F1]"
+            >
+              {booking.transfer_status === "scheduled" ? "→ En route" : "✓ Mark Done"}
+            </Button>
+          ) : (
+            <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+              <Check className="w-3 h-3" /> Completed
+            </span>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function TransfersPage() {
   const { user } = useAuth();
   const isOp = user?.role === "operator";
-  const [activeTab, setActiveTab] = useState("kanban");
+  const [activeTab, setActiveTab] = useState("calendar");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarCarFilter, setCalendarCarFilter] = useState("all");
+  const [calendarSearch, setCalendarSearch] = useState("");
   const [rows, setRows] = useState([]);
   const [summaryData, setSummaryData] = useState({ summary: {}, drivers: [] });
   const [carsList, setCarsList] = useState([]);
@@ -284,6 +457,136 @@ export default function TransfersPage() {
   const totalDriverPending = Math.max(0, totalDriverFees - totalDriverPaid);
   const totalSelfHandled = rows.filter((r) => r.transfer_handled_by === "self" || r.driver_name === "Owner (Self)").length;
 
+  const openNewForDate = (dateStr, type = "airport_pickup") => {
+    setNewForm({
+      ...newTransferEmpty,
+      start_date: dateStr,
+      end_date: dateStr,
+      transfer_type: type,
+      car_id: carsList.length > 0 ? carsList[0].id : "",
+    });
+    setNewOpen(true);
+  };
+
+  const prevMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(today.toISOString().slice(0, 10));
+  };
+
+  const isAirportPickup = (b) => b.transfer_type === "airport_pickup" || b.transfer_type === "both";
+  const isAirportDrop = (b) => b.transfer_type === "airport_drop" || b.transfer_type === "both";
+  const getPickupDate = (b) => (b.start_date || "").slice(0, 10);
+  const getDropDate = (b) => ((b.transfer_type === "both" ? b.end_date : (b.end_date || b.start_date)) || "").slice(0, 10);
+
+  const transferDateMap = useMemo(() => {
+    const map = {};
+    rows.forEach((b) => {
+      if (calendarCarFilter !== "all" && b.car_id !== calendarCarFilter) return;
+
+      if (isAirportPickup(b)) {
+        const pDate = getPickupDate(b);
+        if (pDate) {
+          if (!map[pDate]) map[pDate] = { pickups: [], drops: [] };
+          map[pDate].pickups.push(b);
+        }
+      }
+
+      if (isAirportDrop(b)) {
+        const dDate = getDropDate(b);
+        if (dDate) {
+          if (!map[dDate]) map[dDate] = { pickups: [], drops: [] };
+          map[dDate].drops.push(b);
+        }
+      }
+    });
+    return map;
+  }, [rows, calendarCarFilter]);
+
+  const calendarDays = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth(); // 0-11
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 (Sun) to 6 (Sat)
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    const cells = [];
+
+    // Previous month padding
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const d = daysInPrevMonth - i;
+      const prevDate = new Date(year, month - 1, d);
+      const mStr = String(prevDate.getMonth() + 1).padStart(2, "0");
+      const dStr = String(d).padStart(2, "0");
+      const dateStr = `${prevDate.getFullYear()}-${mStr}-${dStr}`;
+      cells.push({ dayNumber: d, dateStr, isCurrentMonth: false });
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const mStr = String(month + 1).padStart(2, "0");
+      const dStr = String(d).padStart(2, "0");
+      const dateStr = `${year}-${mStr}-${dStr}`;
+      cells.push({ dayNumber: d, dateStr, isCurrentMonth: true });
+    }
+
+    // Next month padding (complete to multiple of 7)
+    const total = cells.length;
+    const remaining = total % 7 === 0 ? 0 : 7 - (total % 7);
+    for (let d = 1; d <= remaining; d++) {
+      const nextDate = new Date(year, month + 1, d);
+      const mStr = String(nextDate.getMonth() + 1).padStart(2, "0");
+      const dStr = String(d).padStart(2, "0");
+      const dateStr = `${nextDate.getFullYear()}-${mStr}-${dStr}`;
+      cells.push({ dayNumber: d, dateStr, isCurrentMonth: false });
+    }
+
+    return cells;
+  }, [currentMonth]);
+
+  const rawSelectedTransfers = transferDateMap[selectedDate] || { pickups: [], drops: [] };
+  const filterQuery = calendarSearch.trim().toLowerCase();
+
+  const selectedPickups = (rawSelectedTransfers.pickups || []).filter((b) => {
+    if (!filterQuery) return true;
+    return (
+      (b.customer_name || "").toLowerCase().includes(filterQuery) ||
+      (b.customer_contact || "").toLowerCase().includes(filterQuery) ||
+      (b.car_model || "").toLowerCase().includes(filterQuery) ||
+      (b.car_registration || "").toLowerCase().includes(filterQuery) ||
+      (b.flight_time || "").toLowerCase().includes(filterQuery) ||
+      (b.driver_name || "").toLowerCase().includes(filterQuery)
+    );
+  });
+
+  const selectedDrops = (rawSelectedTransfers.drops || []).filter((b) => {
+    if (!filterQuery) return true;
+    return (
+      (b.customer_name || "").toLowerCase().includes(filterQuery) ||
+      (b.customer_contact || "").toLowerCase().includes(filterQuery) ||
+      (b.car_model || "").toLowerCase().includes(filterQuery) ||
+      (b.car_registration || "").toLowerCase().includes(filterQuery) ||
+      (b.flight_time || "").toLowerCase().includes(filterQuery) ||
+      (b.driver_name || "").toLowerCase().includes(filterQuery)
+    );
+  });
+
+  const pickupsRevenue = selectedPickups.reduce((sum, b) => sum + Number(b.transfer_cost || 1000), 0);
+  const pickupsDriverCut = selectedPickups.reduce((sum, b) => sum + (b.transfer_handled_by === "driver" ? Number(b.transfer_driver_share || 400) : 0), 0);
+
+  const dropsRevenue = selectedDrops.reduce((sum, b) => sum + Number(b.transfer_cost || 1000), 0);
+  const dropsDriverCut = selectedDrops.reduce((sum, b) => sum + (b.transfer_handled_by === "driver" ? Number(b.transfer_driver_share || 400) : 0), 0);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   return (
     <AppLayout
       title="Airport Transfers"
@@ -342,6 +645,9 @@ export default function TransfersPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="bg-white border border-[#C3E7F1] p-1 h-auto flex flex-wrap gap-1 rounded-xl shadow-xs">
+          <TabsTrigger value="calendar" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
+            📅 Pickups & Drops Calendar (Split Daily View)
+          </TabsTrigger>
           <TabsTrigger value="kanban" className="text-xs font-bold py-1.5 px-3 data-[state=active]:bg-[#20373B] data-[state=active]:text-[#FFC64F]">
             📋 Transfer Board (Kanban)
           </TabsTrigger>
@@ -350,7 +656,371 @@ export default function TransfersPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: KANBAN BOARD */}
+        {/* TAB 1: 📅 INTERACTIVE CALENDAR & SPLIT 2-HALVES VIEW (Pickups vs Drops) */}
+        <TabsContent value="calendar" className="mt-0 space-y-5">
+          {/* Calendar Controls & Month Grid Card */}
+          <div className="bg-white border border-[#C3E7F1] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+            {/* Top Toolbar: Month navigation + Car selector + Date Jump */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#C3E7F1]">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={prevMonth}
+                  className="h-8 w-8 p-0 border-[#C3E7F1] text-[#20373B] hover:bg-[#F4FAFC]"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="min-w-[160px] text-center">
+                  <h3 className="font-display font-bold text-base sm:text-lg text-[#20373B]">
+                    {currentMonth.toLocaleString("default", { month: "long" })} {currentMonth.getFullYear()}
+                  </h3>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={nextMonth}
+                  className="h-8 w-8 p-0 border-[#C3E7F1] text-[#20373B] hover:bg-[#F4FAFC]"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToToday}
+                  className="h-8 px-2.5 text-xs font-bold text-[#20373B] border-[#C3E7F1] hover:bg-[#F4FAFC]"
+                >
+                  Today
+                </Button>
+              </div>
+
+              {/* Filters: Car Filter + Quick Jump Input + Search */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Vehicle Filter */}
+                <div className="w-48 sm:w-56">
+                  <Select value={calendarCarFilter} onValueChange={setCalendarCarFilter}>
+                    <SelectTrigger className="h-8 text-xs border-[#C3E7F1] bg-[#F4FAFC]">
+                      <SelectValue placeholder="All Fleet Vehicles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">🚗 All Fleet Vehicles</SelectItem>
+                      {carsList.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.model} ({c.registration_no})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Direct Date Picker Jump */}
+                <div className="flex items-center gap-1 bg-[#F4FAFC] border border-[#C3E7F1] rounded-lg px-2 h-8">
+                  <CalendarDays className="w-3.5 h-3.5 text-[#519CAB]" />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setSelectedDate(e.target.value);
+                        setCurrentMonth(new Date(e.target.value + "T12:00:00"));
+                      }
+                    }}
+                    className="bg-transparent text-xs text-[#20373B] font-tabular outline-none cursor-pointer"
+                    title="Jump to date"
+                  />
+                </div>
+
+                {/* Quick text filter */}
+                <div className="relative w-40 sm:w-48">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                  <Input
+                    value={calendarSearch}
+                    onChange={(e) => setCalendarSearch(e.target.value)}
+                    placeholder="Search passenger..."
+                    className="h-8 pl-8 text-xs border-[#C3E7F1] bg-[#F4FAFC]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Weekday Names */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400 pb-1">
+              <div>Sun</div>
+              <div>Mon</div>
+              <div>Tue</div>
+              <div>Wed</div>
+              <div>Thu</div>
+              <div>Fri</div>
+              <div>Sat</div>
+            </div>
+
+            {/* Calendar Days Grid */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+              {calendarDays.map((cell, idx) => {
+                const isSelected = cell.dateStr === selectedDate;
+                const isToday = cell.dateStr === todayStr;
+                const dayData = transferDateMap[cell.dateStr] || { pickups: [], drops: [] };
+                const dayPickupsCount = dayData.pickups.length;
+                const dayDropsCount = dayData.drops.length;
+
+                return (
+                  <button
+                    key={`${cell.dateStr}-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(cell.dateStr);
+                      if (!cell.isCurrentMonth) {
+                        setCurrentMonth(new Date(cell.dateStr + "T12:00:00"));
+                      }
+                    }}
+                    className={`min-h-[58px] sm:min-h-[66px] p-1 sm:p-1.5 rounded-xl text-left flex flex-col justify-between transition-all cursor-pointer border ${
+                      isSelected
+                        ? "bg-[#20373B] text-white border-[#20373B] shadow-md ring-2 ring-[#FFC64F]"
+                        : isToday
+                        ? "bg-[#F4FAFC] border-2 border-[#519CAB] text-[#20373B]"
+                        : cell.isCurrentMonth
+                        ? "bg-white border-slate-200 hover:border-[#519CAB] hover:bg-[#F4FAFC]/60 text-[#20373B]"
+                        : "bg-slate-50/60 border-slate-100 text-slate-300 hover:text-slate-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span
+                        className={`text-xs font-bold ${
+                          isSelected ? "text-[#FFC64F]" : isToday ? "text-[#519CAB]" : ""
+                        }`}
+                      >
+                        {cell.dayNumber}
+                      </span>
+                      {isToday && (
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase ${
+                            isSelected ? "bg-[#FFC64F] text-[#20373B]" : "bg-[#519CAB] text-white"
+                          }`}
+                        >
+                          Today
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Transfer badges */}
+                    <div className="space-y-0.5 w-full mt-1">
+                      {dayPickupsCount > 0 && (
+                        <div
+                          className={`text-[9px] sm:text-[10px] leading-tight px-1 py-0.5 rounded font-bold truncate flex items-center gap-0.5 ${
+                            isSelected
+                              ? "bg-emerald-500/30 text-emerald-200 border border-emerald-400/40"
+                              : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          }`}
+                          title={`${dayPickupsCount} Airport Pickup${dayPickupsCount > 1 ? "s" : ""}`}
+                        >
+                          <span>🛫</span>
+                          <span>{dayPickupsCount}</span>
+                          <span className="hidden sm:inline">Pick</span>
+                        </div>
+                      )}
+                      {dayDropsCount > 0 && (
+                        <div
+                          className={`text-[9px] sm:text-[10px] leading-tight px-1 py-0.5 rounded font-bold truncate flex items-center gap-0.5 ${
+                            isSelected
+                              ? "bg-amber-500/30 text-amber-200 border border-amber-400/40"
+                              : "bg-amber-50 text-amber-800 border border-amber-200"
+                          }`}
+                          title={`${dayDropsCount} Airport Drop${dayDropsCount > 1 ? "s" : ""}`}
+                        >
+                          <span>🛬</span>
+                          <span>{dayDropsCount}</span>
+                          <span className="hidden sm:inline">Drop</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Selected Date Header & Financial Stats Bar */}
+          <div className="p-4 bg-[#F4FAFC] border border-[#C3E7F1] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#20373B] text-[#FFC64F] flex items-center justify-center font-bold text-lg shadow-xs shrink-0">
+                📅
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-display font-bold text-base sm:text-lg text-[#20373B]">
+                    {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </h2>
+                  {selectedDate === todayStr && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
+                      Today's Live Duties
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Showing all scheduled airport transfers for this selected date. Click on either column to review details or update drivers.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="bg-white border border-emerald-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Pickups</span>
+                <span className="font-bold text-emerald-800 text-sm">{selectedPickups.length} Trips</span>
+              </div>
+              <div className="bg-white border border-amber-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Drops</span>
+                <span className="font-bold text-amber-800 text-sm">{selectedDrops.length} Trips</span>
+              </div>
+              <div className="bg-white border border-[#C3E7F1] px-3 py-1.5 rounded-xl shadow-2xs">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Day Collections</span>
+                <span className="font-bold text-[#20373B] text-sm">{formatInr(pickupsRevenue + dropsRevenue)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* SPLIT TWO-HALVES VIEW: Pickups (Left) vs Drops (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* FIRST HALF: 🛫 AIRPORT PICKUPS */}
+            <div className="bg-white border-2 border-emerald-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-emerald-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold text-base">
+                    🛫
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-base text-[#20373B]">Airport Pickups</h3>
+                      <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        {selectedPickups.length}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Revenue: {formatInr(pickupsRevenue)} · Driver Cuts: {formatInr(pickupsDriverCut)}
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => openNewForDate(selectedDate, "airport_pickup")}
+                  className="h-8 px-2.5 text-xs font-bold bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Pickup
+                </Button>
+              </div>
+
+              {/* Duty Cards List */}
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[750px] pr-1">
+                {selectedPickups.map((b) => (
+                  <DutyItemCard
+                    key={b.id}
+                    booking={b}
+                    dutyType="pickup"
+                    openEdit={openEdit}
+                    sendDriverWhatsApp={sendDriverWhatsApp}
+                    toggleSplitPayment={toggleSplitPayment}
+                    setStatus={setStatus}
+                  />
+                ))}
+
+                {selectedPickups.length === 0 && (
+                  <div className="p-8 text-center bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1] space-y-2 my-auto">
+                    <div className="text-3xl">🛫</div>
+                    <div className="font-bold text-xs text-[#20373B]">
+                      No Airport Pickups on {formatDate(selectedDate)}
+                    </div>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      No incoming airport pickups scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openNewForDate(selectedDate, "airport_pickup")}
+                      className="text-xs text-[#519CAB] border-[#C3E7F1] hover:bg-white"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Pickup
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SECOND HALF: 🛬 AIRPORT DROPS */}
+            <div className="bg-white border-2 border-amber-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center font-bold text-base">
+                    🛬
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-base text-[#20373B]">Airport Drops</h3>
+                      <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        {selectedDrops.length}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Revenue: {formatInr(dropsRevenue)} · Driver Cuts: {formatInr(dropsDriverCut)}
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => openNewForDate(selectedDate, "airport_drop")}
+                  className="h-8 px-2.5 text-xs font-bold bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Drop
+                </Button>
+              </div>
+
+              {/* Duty Cards List */}
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[750px] pr-1">
+                {selectedDrops.map((b) => (
+                  <DutyItemCard
+                    key={b.id}
+                    booking={b}
+                    dutyType="drop"
+                    openEdit={openEdit}
+                    sendDriverWhatsApp={sendDriverWhatsApp}
+                    toggleSplitPayment={toggleSplitPayment}
+                    setStatus={setStatus}
+                  />
+                ))}
+
+                {selectedDrops.length === 0 && (
+                  <div className="p-8 text-center bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1] space-y-2 my-auto">
+                    <div className="text-3xl">🛬</div>
+                    <div className="font-bold text-xs text-[#20373B]">
+                      No Airport Drops on {formatDate(selectedDate)}
+                    </div>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      No outgoing airport drops scheduled for this date {calendarCarFilter !== "all" ? "for the selected car" : ""}.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openNewForDate(selectedDate, "airport_drop")}
+                      className="text-xs text-[#519CAB] border-[#C3E7F1] hover:bg-white"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Schedule Drop
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* TAB 2: KANBAN BOARD */}
         <TabsContent value="kanban" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {stages.map((s) => (
