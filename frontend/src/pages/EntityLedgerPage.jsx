@@ -51,7 +51,7 @@ export default function EntityLedgerPage({ type }) {
   const [expenseForm, setExpenseForm] = useState({
     category: "fuel",
     amount: "",
-    car_id: "",
+    car_id: "none",
     description: "",
     settlement_type: "deduct_from_payout",
   });
@@ -100,7 +100,7 @@ export default function EntityLedgerPage({ type }) {
         setEntries(l.data);
         setExpenses(exp.data);
         setSummary(sum.data);
-        if (e.data.cars?.length === 1 && !expenseForm.car_id) {
+        if (e.data.cars?.length === 1 && (!expenseForm.car_id || expenseForm.car_id === "none")) {
           setExpenseForm((prev) => ({ ...prev, car_id: e.data.cars[0].id }));
         }
       } else {
@@ -172,7 +172,7 @@ export default function EntityLedgerPage({ type }) {
     try {
       await api.post(`/owners/${id}/expenses`, {
         owner_id: id,
-        car_id: expenseForm.car_id || null,
+        car_id: (expenseForm.car_id && expenseForm.car_id !== "none") ? expenseForm.car_id : null,
         category: expenseForm.category,
         amount: Number(expenseForm.amount),
         description: expenseForm.description,
@@ -183,7 +183,7 @@ export default function EntityLedgerPage({ type }) {
       setExpenseForm({
         category: "fuel",
         amount: "",
-        car_id: entity?.cars?.length === 1 ? entity.cars[0].id : "",
+        car_id: entity?.cars?.length === 1 ? entity.cars[0].id : "none",
         description: "",
         settlement_type: "deduct_from_payout",
       });
@@ -1054,8 +1054,8 @@ export default function EntityLedgerPage({ type }) {
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Vehicle</Label>
               <Select
-                value={expenseForm.car_id}
-                onValueChange={(v) => setExpenseForm({ ...expenseForm, car_id: v })}
+                value={expenseForm.car_id || "none"}
+                onValueChange={(v) => setExpenseForm({ ...expenseForm, car_id: v === "none" ? "none" : v })}
               >
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Select vehicle" />
@@ -1066,7 +1066,7 @@ export default function EntityLedgerPage({ type }) {
                       {c.model} · {c.registration_no}
                     </SelectItem>
                   ))}
-                  <SelectItem value="">General / Unspecified Vehicle</SelectItem>
+                  <SelectItem value="none">General / Unspecified Vehicle</SelectItem>
                 </SelectContent>
               </Select>
             </div>
