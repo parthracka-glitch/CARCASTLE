@@ -343,9 +343,15 @@ export default function BookingsPage() {
     }
   };
 
-  const computedTotalCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
+  const computedCarCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
   const computedTotalCost = form.daily_cost_rate ? Number(form.daily_cost_rate) * days : Number(form.cost_rate || 0);
-  const computedMargin = computedTotalCustomer - computedTotalCost;
+  const hasTransfer = form.transfer_type && form.transfer_type !== "none";
+  const computedTransferCost = hasTransfer ? Number(form.transfer_cost || (form.transfer_type === "both" ? 2000 : 1000)) : 0;
+  const computedDriverCut = (hasTransfer && form.transfer_handled_by === "driver") ? Number(form.transfer_driver_share || 400) : 0;
+  const computedTotalCustomer = computedCarCustomer + computedTransferCost;
+  const computedCarProfit = computedCarCustomer - computedTotalCost;
+  const computedTransferProfit = computedTransferCost - computedDriverCut;
+  const computedMargin = computedCarProfit + computedTransferProfit;
   const computedNet = computedMargin - Number(form.agent_fee || 0);
 
   return (
@@ -875,25 +881,44 @@ export default function BookingsPage() {
               {/* Live Calculation Summary Banner */}
               {!isOp && (computedTotalCustomer > 0 || computedTotalCost > 0) && (
                 <div className="sm:col-span-2 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] p-3.5 space-y-1.5 text-xs">
-                  <div className="font-bold text-[#20373B] text-xs uppercase tracking-wider mb-1">
-                    📊 Booking Financial Calculation ({days} Day{days > 1 ? "s" : ""})
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="font-bold text-[#20373B] text-xs uppercase tracking-wider">
+                      📊 Booking Financial Calculation ({days} Day{days > 1 ? "s" : ""})
+                    </div>
+                    {hasTransfer && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold">
+                        ✈️ Airport Transfer Active
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
                       <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Customer</div>
                       <div className="font-bold font-tabular text-[#20373B] text-sm mt-0.5">{formatInr(computedTotalCustomer)}</div>
+                      {hasTransfer && (
+                        <div className="text-[9px] text-slate-400 font-tabular">Car {formatInr(computedCarCustomer)} + Apt {formatInr(computedTransferCost)}</div>
+                      )}
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Owner Rent</div>
-                      <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost)}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Cost</div>
+                      <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost + computedDriverCut)}</div>
+                      {computedDriverCut > 0 ? (
+                        <div className="text-[9px] text-amber-700 font-tabular">Owner {formatInr(computedTotalCost)} + Driver {formatInr(computedDriverCut)}</div>
+                      ) : (
+                        <div className="text-[9px] text-slate-400 font-tabular">Owner Rent: {formatInr(computedTotalCost)}</div>
+                      )}
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
                       <div className="text-[10px] text-slate-400 font-semibold uppercase">Gross Margin</div>
                       <div className="font-bold font-tabular text-emerald-700 text-sm mt-0.5">{formatInr(computedMargin)}</div>
+                      {hasTransfer && (
+                        <div className="text-[9px] text-emerald-600 font-tabular">Car ₹{Math.round(computedCarProfit)} + Cab ₹{Math.round(computedTransferProfit)}</div>
+                      )}
                     </div>
                     <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
                       <div className="text-[10px] text-emerald-800 font-semibold uppercase">Net Take-Home</div>
                       <div className="font-extrabold font-tabular text-emerald-800 text-sm mt-0.5">{formatInr(computedNet)}</div>
+                      <div className="text-[9px] text-emerald-700 font-semibold">Car + Cab Profit</div>
                     </div>
                   </div>
                 </div>

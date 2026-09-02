@@ -251,7 +251,7 @@ export default function DashboardPage() {
           badge="Total Sales"
           label="Customer Revenue"
           value={formatInr(s.total_income)}
-          sub={`Total collected from customers across ${s.booking_count || 0} bookings`}
+          sub={s.total_transfer_income > 0 ? `Car: ${formatInr(s.total_car_income || 0)} + Airport: ${formatInr(s.total_transfer_income || 0)}` : `Total collected from customers across ${s.booking_count || 0} bookings`}
           tone="default"
           testid="kpi-customer-revenue"
         />
@@ -260,7 +260,7 @@ export default function DashboardPage() {
           badge="Your Earnings"
           label="Net Profit (Take-Home)"
           value={formatInr(s.total_net_profit)}
-          sub="What you keep after paying car rent & driver fees"
+          sub={s.total_transfer_profit > 0 ? `Car profit: ${formatInr(s.total_car_profit || 0)} + Cab pickup profit: ${formatInr(s.total_transfer_profit || 0)}` : "What you keep after paying car rent & driver fees"}
           tone="positive"
           testid="kpi-net-profit"
         />
@@ -282,6 +282,36 @@ export default function DashboardPage() {
           tone="warn"
           testid="kpi-savings"
         />
+      </div>
+
+      {/* 📊 Live Net Profit Formula Card */}
+      <div className="mt-3 p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-xs text-emerald-950 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0 text-sm shadow-xs">
+            ₹
+          </div>
+          <div>
+            <div className="font-bold text-xs text-emerald-950">
+              Net Profit Formula Breakdown:
+            </div>
+            <div className="text-[11px] text-emerald-800">
+              (Total Booking + Airport Transfer) − Car Owner Rent − Driver Cut = <strong>Net Take-Home Profit</strong>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs font-semibold">
+          <span className="bg-white border border-emerald-300 px-2.5 py-1 rounded-md text-emerald-900 shadow-2xs">
+            🚗 Car Profit: <strong className="font-tabular text-[#20373B]">{formatInr(s.total_car_profit !== undefined ? s.total_car_profit : (s.total_income - (s.total_owner_cost || 0)))}</strong>
+          </span>
+          <span className="text-emerald-700 font-bold">+</span>
+          <span className="bg-white border border-emerald-300 px-2.5 py-1 rounded-md text-emerald-900 shadow-2xs">
+            ✈️ Cab Pickup Profit: <strong className="font-tabular text-[#20373B]">{formatInr(s.total_transfer_profit || 0)}</strong>
+          </span>
+          <span className="text-emerald-700 font-bold">=</span>
+          <span className="bg-emerald-600 text-white px-2.5 py-1 rounded-md font-bold shadow-2xs">
+            {formatInr(s.total_net_profit)} Net Take-Home
+          </span>
+        </div>
       </div>
 
       {/* 💵 Payment Method Breakdown & Security Deposits Strip */}

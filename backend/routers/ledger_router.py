@@ -128,6 +128,44 @@ def _month_key(iso_str: str) -> str:
     return iso_str[:7]  # YYYY-MM
 
 
+def compute_booking_financials(b: dict) -> dict:
+    car_income = float(b.get("customer_rate") or 0.0)
+    has_transfer = bool(b.get("transfer_type") and b.get("transfer_type") != "none")
+    transfer_income = float(b.get("transfer_cost") or 0.0) if has_transfer else 0.0
+    total_income = car_income + transfer_income
+
+    owner_cost = float(b.get("cost_rate") or 0.0)
+
+    driver_paid = 0.0
+    if has_transfer:
+        handled_by = b.get("transfer_handled_by")
+        if handled_by == "driver":
+            driver_paid = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else (b.get("driver_fee") or 0.0))
+        elif handled_by != "self":
+            d_name = (b.get("driver_name") or "").lower()
+            if d_name and "owner" not in d_name and "self" not in d_name:
+                driver_paid = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else (b.get("driver_fee") or 0.0))
+
+    agent_fee = float(b.get("agent_fee") or 0.0)
+    car_profit = car_income - owner_cost
+    transfer_profit = transfer_income - driver_paid
+    margin = car_profit + transfer_profit
+    net_profit = margin - agent_fee
+
+    return {
+        "car_income": car_income,
+        "transfer_income": transfer_income,
+        "total_income": total_income,
+        "owner_cost": owner_cost,
+        "driver_paid": driver_paid,
+        "agent_fee": agent_fee,
+        "car_profit": car_profit,
+        "transfer_profit": transfer_profit,
+        "margin": margin,
+        "net_profit": net_profit,
+    }
+
+
 @finance_router.get("/summary")
 async def finance_summary(user: dict = Depends(require_super_admin)):
     db = get_db()
@@ -135,16 +173,25 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
     settings = await db.settings.find_one({"id": "default"}) or {"savings_percent": 10}
     savings_pct = float(settings.get("savings_percent", 10))
 
-    total_income = sum(float(b["customer_rate"]) for b in bookings)
-    total_owner_cost = sum(float(b["cost_rate"]) for b in bookings)
-    total_agent_fee = sum(float(b.get("agent_fee", 0)) for b in bookings)
-    total_margin = sum(float(b["margin"]) for b in bookings)
-    total_net_profit = sum(float(b["net_profit"]) for b in bookings)
+    fin_list = [compute_booking_financials(b) for b in bookings]
+
+    total_car_income = sum(f["car_income"] for f in fin_list)
+    total_transfer_income = sum(f["transfer_income"] for f in fin_list)
+    total_income = sum(f["total_income"] for f in fin_list)
+
+    total_owner_cost = sum(f["owner_cost"] for f in fin_list)
+    total_driver_paid = sum(f["driver_paid"] for f in fin_list)
+    total_agent_fee = sum(f["agent_fee"] for f in fin_list)
+
+    total_car_profit = sum(f["car_profit"] for f in fin_list)
+    total_transfer_profit = sum(f["transfer_profit"] for f in fin_list)
+    total_margin = sum(f["margin"] for f in fin_list)
+    total_net_profit = sum(f["net_profit"] for f in fin_list)
     savings_accrued = total_net_profit * (savings_pct / 100.0)
 
     # Cash vs Online payment methods
-    total_cash_income = sum(float(b["customer_rate"]) for b in bookings if b.get("payment_method") != "online")
-    total_online_income = sum(float(b["customer_rate"]) for b in bookings if b.get("payment_method") == "online")
+    total_cash_income = sum(f["total_income"] for b, f in zip(bookings, fin_list) if b.get("payment_method") != "online")
+    total_online_income = sum(f["total_income"] for b, f in zip(bookings, fin_list) if b.get("payment_method") == "online")
 
     # Security Deposits
     total_deposit_held = sum(float(b.get("deposit_amount", 0)) for b in bookings if b.get("deposit_status") == "received")
@@ -158,27 +205,42 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
 
     # By month
     by_month = {}
-    for b in bookings:
+    for b, f in zip(bookings, fin_list):
         m = _month_key(b.get("start_date", b["created_at"]))
-        by_month.setdefault(m, {"income": 0, "owner_cost": 0, "agent_fee": 0,
-                                "margin": 0, "net_profit": 0, "bookings": 0})
-        by_month[m]["income"] += float(b["customer_rate"])
-        by_month[m]["owner_cost"] += float(b["cost_rate"])
-        by_month[m]["agent_fee"] += float(b.get("agent_fee", 0))
-        by_month[m]["margin"] += float(b["margin"])
-        by_month[m]["net_profit"] += float(b["net_profit"])
+        by_month.setdefault(m, {
+            "income": 0.0, "car_income": 0.0, "transfer_income": 0.0,
+            "owner_cost": 0.0, "driver_paid": 0.0, "agent_fee": 0.0,
+            "car_profit": 0.0, "transfer_profit": 0.0,
+            "margin": 0.0, "net_profit": 0.0, "bookings": 0
+        })
+        by_month[m]["income"] += f["total_income"]
+        by_month[m]["car_income"] += f["car_income"]
+        by_month[m]["transfer_income"] += f["transfer_income"]
+        by_month[m]["owner_cost"] += f["owner_cost"]
+        by_month[m]["driver_paid"] += f["driver_paid"]
+        by_month[m]["agent_fee"] += f["agent_fee"]
+        by_month[m]["car_profit"] += f["car_profit"]
+        by_month[m]["transfer_profit"] += f["transfer_profit"]
+        by_month[m]["margin"] += f["margin"]
+        by_month[m]["net_profit"] += f["net_profit"]
         by_month[m]["bookings"] += 1
+
     months = [{"month": k, **v, "savings": v["net_profit"] * (savings_pct / 100.0)}
               for k, v in sorted(by_month.items())]
 
     return {
         "total_income": total_income,
+        "total_car_income": total_car_income,
+        "total_transfer_income": total_transfer_income,
         "total_cash_income": total_cash_income,
         "total_online_income": total_online_income,
         "total_deposit_held": total_deposit_held,
         "total_deposit_refunded": total_deposit_refunded,
         "total_owner_cost": total_owner_cost,
+        "total_driver_paid": total_driver_paid,
         "total_agent_fee": total_agent_fee,
+        "total_car_profit": total_car_profit,
+        "total_transfer_profit": total_transfer_profit,
         "total_margin": total_margin,
         "total_net_profit": total_net_profit,
         "savings_accrued": savings_accrued,
@@ -223,9 +285,12 @@ async def margin_timeseries(
                 key = d[:7]
         else:
             key = d
-        buckets.setdefault(key, {"margin": 0, "net_profit": 0, "bookings": 0})
-        buckets[key]["margin"] += float(b["margin"])
-        buckets[key]["net_profit"] += float(b["net_profit"])
+        f = compute_booking_financials(b)
+        buckets.setdefault(key, {"margin": 0.0, "net_profit": 0.0, "car_profit": 0.0, "transfer_profit": 0.0, "bookings": 0})
+        buckets[key]["margin"] += f["margin"]
+        buckets[key]["net_profit"] += f["net_profit"]
+        buckets[key]["car_profit"] += f["car_profit"]
+        buckets[key]["transfer_profit"] += f["transfer_profit"]
         buckets[key]["bookings"] += 1
 
     return [{"bucket": k, **v} for k, v in sorted(buckets.items())]

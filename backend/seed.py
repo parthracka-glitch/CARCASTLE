@@ -385,9 +385,49 @@ async def seed_demo_data(db):
     }
 
 
+async def sync_bookings_financials(db):
+    """Ensure all bookings have accurate margin, net_profit, car_profit and transfer_profit."""
+    cursor = db.bookings.find({})
+    async for b in cursor:
+        car_income = float(b.get("customer_rate") or 0.0)
+        has_transfer = bool(b.get("transfer_type") and b.get("transfer_type") != "none")
+        transfer_income = float(b.get("transfer_cost") or 0.0) if has_transfer else 0.0
+        owner_cost = float(b.get("cost_rate") or 0.0)
+
+        driver_paid = 0.0
+        if has_transfer:
+            handled_by = b.get("transfer_handled_by")
+            if handled_by == "driver":
+                driver_paid = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else (b.get("driver_fee") or 0.0))
+            elif handled_by != "self":
+                d_name = (b.get("driver_name") or "").lower()
+                if d_name and "owner" not in d_name and "self" not in d_name:
+                    driver_paid = float(b.get("transfer_driver_share") if b.get("transfer_driver_share") is not None else (b.get("driver_fee") or 0.0))
+
+        agent_fee = float(b.get("agent_fee") or 0.0)
+        car_profit = car_income - owner_cost
+        transfer_profit = transfer_income - driver_paid
+        margin = car_profit + transfer_profit
+        net_profit = margin - agent_fee
+
+        updates = {}
+        if b.get("margin") != margin:
+            updates["margin"] = margin
+        if b.get("net_profit") != net_profit:
+            updates["net_profit"] = net_profit
+        if b.get("car_profit") != car_profit:
+            updates["car_profit"] = car_profit
+        if b.get("transfer_profit") != transfer_profit:
+            updates["transfer_profit"] = transfer_profit
+
+        if updates:
+            await db.bookings.update_one({"id": b["id"]}, {"$set": updates})
+
+
 async def seed(db):
     """Entrypoint called on server startup."""
     await seed_users_and_settings(db)
+    await sync_bookings_financials(db)
 
 
 async def create_indexes(db):

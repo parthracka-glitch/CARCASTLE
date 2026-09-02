@@ -35,15 +35,15 @@ export default function FinancePage() {
           badge="Total Sales"
           label="Customer Revenue"
           value={formatInr(s.total_income)}
-          sub={`Total from ${s.booking_count} bookings`}
+          sub={s.total_transfer_income > 0 ? `Car: ${formatInr(s.total_car_income || 0)} · Airport: ${formatInr(s.total_transfer_income || 0)}` : `Total from ${s.booking_count} bookings`}
           testid="finance-income"
         />
         <KpiCard
           icon={HandCoins}
           badge="Costs"
           label="Total Payouts Owed"
-          value={formatInr(s.total_owner_cost + s.total_agent_fee)}
-          sub={`Car rent: ${formatInr(s.total_owner_cost)} · Driver fees: ${formatInr(s.total_agent_fee)}`}
+          value={formatInr(s.total_owner_cost + (s.total_driver_paid || 0) + s.total_agent_fee)}
+          sub={`Car rent: ${formatInr(s.total_owner_cost)} · Driver cuts: ${formatInr((s.total_driver_paid || 0) + s.total_agent_fee)}`}
           tone="negative"
           testid="finance-payouts"
         />
@@ -52,7 +52,7 @@ export default function FinancePage() {
           badge="Your Earnings"
           label="Net Take-Home Profit"
           value={formatInr(s.total_net_profit)}
-          sub={`Gross margin before drivers: ${formatInr(s.total_margin)}`}
+          sub={s.total_transfer_profit > 0 ? `Car profit: ${formatInr(s.total_car_profit)} + Cab pickup profit: ${formatInr(s.total_transfer_profit)}` : `Car profit: ${formatInr(s.total_car_profit || s.total_margin)}`}
           tone="positive"
           testid="finance-net"
         />

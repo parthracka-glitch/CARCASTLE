@@ -207,8 +207,10 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
         daily_customer = customer_rate / days
 
     agent_fee = float(payload.agent_fee or 0)
-    margin = customer_rate - cost_rate
-    net_profit = margin - agent_fee
+    car_profit = customer_rate - cost_rate
+    transfer_profit = 0.0
+    transfer_driver_cut = 0.0
+    transfer_cost = 0.0
 
     deposit_amt = float(payload.deposit_amount or 0.0)
     if deposit_amt > 0 and (not payload.deposit_status or payload.deposit_status == "none"):
@@ -235,8 +237,8 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
 
     # Transfer breakdown
     if payload.transfer_type != "none":
-        t_cost = float(payload.transfer_cost if payload.transfer_cost is not None else 1000.0)
-        booking_dict["transfer_cost"] = t_cost
+        transfer_cost = float(payload.transfer_cost if payload.transfer_cost is not None else 1000.0)
+        booking_dict["transfer_cost"] = transfer_cost
 
         handled_by = payload.transfer_handled_by
         if not handled_by:
@@ -252,12 +254,14 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
             booking_dict["driver_contact"] = ""
             booking_dict["driver_fee"] = 0.0
             booking_dict["transfer_driver_share"] = 0.0
-            booking_dict["transfer_manoj_share"] = t_cost
+            booking_dict["transfer_manoj_share"] = transfer_cost
             booking_dict["transfer_driver_paid"] = True  # Self handled -> zero driver liability
             booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
+            transfer_driver_cut = 0.0
+            transfer_profit = transfer_cost
         else:
             d_share = float(payload.transfer_driver_share if payload.transfer_driver_share is not None else (payload.driver_fee or 400.0))
-            m_share = float(payload.transfer_manoj_share if payload.transfer_manoj_share is not None else max(0.0, t_cost - d_share))
+            m_share = float(payload.transfer_manoj_share if payload.transfer_manoj_share is not None else max(0.0, transfer_cost - d_share))
             booking_dict["driver_name"] = payload.driver_name if (payload.driver_name and payload.driver_name != "Owner (Self)") else "Driver"
             booking_dict["driver_contact"] = getattr(payload, "driver_contact", "") or ""
             booking_dict["driver_fee"] = d_share
@@ -265,6 +269,16 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
             booking_dict["transfer_manoj_share"] = m_share
             booking_dict["transfer_driver_paid"] = bool(payload.transfer_driver_paid)
             booking_dict["transfer_manoj_paid"] = bool(payload.transfer_manoj_paid)
+            transfer_driver_cut = d_share
+            transfer_profit = max(0.0, transfer_cost - transfer_driver_cut)
+
+    # Net Profit = Total Booking + Airport Amount - Owner Rent - Driver Pickup Cut - Agent Fee
+    #            = Car Profit + Cab Pickup Profit - Agent Fee
+    margin = (customer_rate + transfer_cost) - cost_rate - transfer_driver_cut
+    net_profit = margin - agent_fee
+
+    booking_dict["car_profit"] = car_profit
+    booking_dict["transfer_profit"] = transfer_profit
 
     booking = {
         "id": new_id(),
@@ -390,11 +404,19 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
         if not updates:
             raise HTTPException(403, "Operators cannot modify these fields")
 
-    # Recompute margin if rates changed
+    # Recompute margin & net profit if rates or transfer changed
     new_cost = float(updates.get("cost_rate", old["cost_rate"]))
     new_customer = float(updates.get("customer_rate", old["customer_rate"]))
     new_agent_fee = float(updates.get("agent_fee", old.get("agent_fee", 0)))
-    updates["margin"] = new_customer - new_cost
+
+    t_type = updates.get("transfer_type", old.get("transfer_type", "none"))
+    t_cost = float(updates.get("transfer_cost", old.get("transfer_cost", 1000.0))) if t_type != "none" else 0.0
+    h_by = updates.get("transfer_handled_by", old.get("transfer_handled_by", "self"))
+    d_share = float(updates.get("transfer_driver_share", old.get("transfer_driver_share", (old.get("driver_fee") or 400.0)))) if (t_type != "none" and h_by == "driver") else 0.0
+
+    updates["car_profit"] = new_customer - new_cost
+    updates["transfer_profit"] = max(0.0, t_cost - d_share)
+    updates["margin"] = (new_customer + t_cost) - new_cost - d_share
     updates["net_profit"] = updates["margin"] - new_agent_fee
     updates["updated_at"] = now_iso()
 
