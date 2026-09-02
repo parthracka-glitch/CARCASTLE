@@ -120,6 +120,31 @@ async def send_ledger_reminder(ledger_id: str, user: dict = Depends(require_supe
     return {"ok": True, "message": msg}
 
 
+@router.delete("/{ledger_id}")
+async def delete_ledger_entry(ledger_id: str, user: dict = Depends(require_super_admin)):
+    db = get_db()
+    entry = await db.ledger.find_one({"id": ledger_id})
+    if not entry:
+        raise HTTPException(404, "Ledger entry not found")
+
+    col = "car_owners" if entry.get("entity_type") == "owner" else "agents"
+    if entry.get("entity_id"):
+        amt = float(entry.get("amount") or 0.0)
+        paid = float(entry.get("amount_paid") or 0.0)
+        await db[col].update_one(
+            {"id": entry["entity_id"]},
+            {"$inc": {"total_owed": -amt, "total_paid": -paid}}
+        )
+
+    await db.ledger.delete_one({"id": ledger_id})
+    await log_activity(db, user, "delete", "ledger", ledger_id, {
+        "description": entry.get("description"),
+        "amount": entry.get("amount"),
+        "entity_id": entry.get("entity_id")
+    })
+    return {"ok": True, "message": "Payout entry deleted successfully"}
+
+
 # ---------- Finance & Savings ----------
 finance_router = APIRouter(prefix="/finance", tags=["finance"])
 

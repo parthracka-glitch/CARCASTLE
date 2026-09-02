@@ -264,6 +264,20 @@ export default function EntityLedgerPage({ type }) {
     }
   };
 
+  const deleteEntry = async (e) => {
+    const label = e.description || `Entry (₹${e.amount})`;
+    if (!window.confirm(`Are you sure you want to delete this payout entry?\n\n"${label}"\n\nAmount: ₹${Number(e.amount).toLocaleString("en-IN")}\nThis will permanently remove it from payouts and dues.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/ledger/${e.id}`);
+      toast.success("Payout entry deleted successfully");
+      await load();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || err.message);
+    }
+  };
+
   // Build WhatsApp Statement Text
   const buildWhatsAppText = () => {
     if (!entity) return "";
@@ -669,30 +683,42 @@ export default function EntityLedgerPage({ type }) {
                     </div>
                   </div>
 
-                  {e.status !== "paid" ? (
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openPay(e)}
-                        className="h-8 text-xs font-semibold border-[#519CAB] text-[#20373B]"
-                      >
-                        <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay Settlement
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => remind(e)}
-                        className="h-8 text-xs text-[#519CAB]"
-                      >
-                        <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-right text-xs text-emerald-600 font-semibold flex items-center justify-end gap-1 pt-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
-                    </div>
-                  )}
+                  <div className="flex items-center justify-end gap-2 pt-1 flex-wrap">
+                    {e.status !== "paid" ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openPay(e)}
+                          className="h-8 text-xs font-semibold border-[#519CAB] text-[#20373B]"
+                        >
+                          <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay Settlement
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => remind(e)}
+                          className="h-8 text-xs text-[#519CAB]"
+                        >
+                          <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="text-right text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
+                      </div>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteEntry(e)}
+                      className="h-8 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-2"
+                      title="Delete entry"
+                      data-testid={`entity-ledger-mobile-delete-${e.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -734,20 +760,32 @@ export default function EntityLedgerPage({ type }) {
                     <td className={`px-5 py-3 text-right font-tabular font-bold ${bal > 0 ? "text-red-700" : "text-slate-500"}`}>{formatInr(bal)}</td>
                     <td className="px-5 py-3"><StatusPill status={e.status} /></td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
-                      {e.status !== "paid" ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="outline" size="sm" onClick={() => openPay(e)} className="h-8 border-[#519CAB] text-[#20373B] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-pay-${e.id}`}>
-                            <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => remind(e)} className="h-8 text-[#519CAB] hover:bg-[#C3E7F1]/20 font-semibold" data-testid={`ledger-remind-${e.id}`}>
-                            <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-emerald-600 font-semibold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
-                        </span>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {e.status !== "paid" ? (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => openPay(e)} className="h-8 border-[#519CAB] text-[#20373B] hover:bg-[#C3E7F1]/30 font-semibold" data-testid={`ledger-pay-${e.id}`}>
+                              <IndianRupee className="w-3.5 h-3.5 mr-1 text-[#519CAB]" /> Pay
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => remind(e)} className="h-8 text-[#519CAB] hover:bg-[#C3E7F1]/20 font-semibold" data-testid={`ledger-remind-${e.id}`}>
+                              <Bell className="w-3.5 h-3.5 mr-1 text-[#FFC64F]" /> Remind
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-emerald-600 font-semibold inline-flex items-center gap-1 mr-2">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
+                          </span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteEntry(e)}
+                          className="h-8 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-2"
+                          title="Delete entry"
+                          data-testid={`entity-ledger-desktop-delete-${e.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
