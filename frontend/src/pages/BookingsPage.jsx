@@ -135,11 +135,11 @@ export default function BookingsPage() {
       const calcDays = calculateRentalDays(form.start_date, form.end_date, form.pickup_time, form.drop_time);
       const dailyCost = Number(form.daily_cost_rate || (form.cost_rate ? Number(form.cost_rate) / calcDays : 0));
       const dailyCustomer = Number(form.daily_customer_rate || (form.customer_rate ? Number(form.customer_rate) / calcDays : 0));
-      const totalCost = Number(form.cost_rate || (dailyCost * calcDays));
+      const totalCost = dailyCost > 0 ? Number(dailyCost * calcDays) : Number(form.cost_rate || 0);
       const pPrice = Number(form.pickup_price || 0);
       const dPrice = Number(form.drop_price || 0);
       const locTransferTotal = pPrice + dPrice;
-      const totalCarCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
+      const totalCarCustomer = dailyCustomer > 0 ? Number(dailyCustomer * calcDays) : Number(form.customer_rate || 0);
       const totalCustomer = totalCarCustomer + locTransferTotal;
       const depositAmt = Number(form.deposit_amount || 0);
       const advAmt = Number(form.advance_payment || 0);

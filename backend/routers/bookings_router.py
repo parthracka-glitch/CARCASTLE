@@ -437,9 +437,23 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
         if not updates:
             raise HTTPException(403, "Operators cannot modify these fields")
 
-    # Recompute margin & net profit if rates or transfer changed
-    new_cost = float(updates.get("cost_rate", old["cost_rate"]))
-    new_customer = float(updates.get("customer_rate", old["customer_rate"]))
+    # Recompute daily rates & days if rental dates changed
+    new_days = int(updates.get("days", old.get("days", 1)))
+    new_daily_cost = float(updates.get("daily_cost_rate", old.get("daily_cost_rate", 0)))
+    new_daily_cust = float(updates.get("daily_customer_rate", old.get("daily_customer_rate", 0)))
+
+    if new_daily_cost > 0 and new_days > 0:
+        new_cost = new_daily_cost * new_days
+        updates["cost_rate"] = new_cost
+    else:
+        new_cost = float(updates.get("cost_rate", old["cost_rate"]))
+
+    if new_daily_cust > 0 and new_days > 0:
+        new_customer = new_daily_cust * new_days
+        updates["customer_rate"] = new_customer
+    else:
+        new_customer = float(updates.get("customer_rate", old["customer_rate"]))
+
     new_agent_fee = float(updates.get("agent_fee", old.get("agent_fee", 0)))
 
     p_price = float(updates.get("pickup_price", old.get("pickup_price", 0.0)))
@@ -466,6 +480,31 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
     updates["balance_due"] = max(0.0, (new_customer + t_cost) - adv)
 
     updates["updated_at"] = now_iso()
+
+    # Sync owner ledger payout entry if booking dates or cost changed
+    old_cost = float(old.get("cost_rate", 0))
+    diff_cost = new_cost - old_cost
+    owner_id = updates.get("owner_id", old.get("owner_id"))
+    if owner_id:
+        owner_ledger = await db.ledger.find_one({"booking_id": booking_id, "entity_type": "owner"})
+        if owner_ledger:
+            new_amount = float(owner_ledger.get("amount", old_cost)) + diff_cost
+            cust_name = updates.get("customer_name", old.get("customer_name", ""))
+            days_note = f" ({new_days} days @ ₹{int(new_daily_cost):,}/day)" if new_days > 1 else ""
+            await db.ledger.update_one(
+                {"id": owner_ledger["id"]},
+                {"$set": {
+                    "amount": new_amount,
+                    "due_date": updates.get("end_date", old.get("end_date")),
+                    "description": f"Booking {booking_id[:8]} — {cust_name}{days_note}",
+                    "updated_at": now_iso()
+                }}
+            )
+            if abs(diff_cost) > 0.01:
+                await db.car_owners.update_one(
+                    {"id": owner_id},
+                    {"$inc": {"total_owed": diff_cost}}
+                )
 
     await db.bookings.update_one({"id": booking_id}, {"$set": updates})
     await log_activity(db, user, "update", "bookings", booking_id,
