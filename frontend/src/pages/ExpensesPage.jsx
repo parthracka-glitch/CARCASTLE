@@ -19,13 +19,11 @@ import {
 } from "lucide-react";
 
 export const expenseCatMeta = {
-  fuel: { label: "Fuel (Petrol/Diesel)", icon: "⛽", badge: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-  fastag: { label: "FASTag / Toll", icon: "🏷️", badge: "bg-blue-50 text-blue-800 border-blue-200" },
-  driver_payment: { label: "Driver Extra Cash", icon: "🚕", badge: "bg-amber-50 text-amber-800 border-amber-200" },
-  service: { label: "Service / Repair", icon: "🔧", badge: "bg-purple-50 text-purple-800 border-purple-200" },
+  fuel: { label: "Fuel", icon: "⛽", badge: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  driver_payment: { label: "Driver Cash", icon: "🚕", badge: "bg-amber-50 text-amber-800 border-amber-200" },
   wash: { label: "Car Wash", icon: "🧼", badge: "bg-cyan-50 text-cyan-800 border-cyan-200" },
   challan: { label: "Traffic Challan", icon: "⚠️", badge: "bg-red-50 text-red-800 border-red-200" },
-  other: { label: "Other Expense", icon: "📝", badge: "bg-slate-100 text-slate-800 border-slate-200" },
+  other: { label: "Other / Custom", icon: "📝", badge: "bg-purple-50 text-purple-800 border-purple-200" },
 };
 
 export default function ExpensesPage() {
@@ -37,9 +35,7 @@ export default function ExpensesPage() {
   const [summary, setSummary] = useState({
     total_expenses: 0,
     fuel_total: 0,
-    fastag_total: 0,
     driver_payment_total: 0,
-    service_total: 0,
     wash_total: 0,
     challan_total: 0,
     other_total: 0,
@@ -56,9 +52,11 @@ export default function ExpensesPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     category: "fuel",
+    custom_category: "",
     amount: "",
     date: new Date().toISOString().slice(0, 10),
     car_id: "none",
+    custom_vehicle: "",
     payment_method: "cash",
     description: "",
     driver_name: "",
@@ -91,13 +89,23 @@ export default function ExpensesPage() {
       toast.error("Please enter a valid expense amount");
       return;
     }
+    if (form.category === "other" && !form.custom_category?.trim()) {
+      toast.error("Please enter the custom expense name");
+      return;
+    }
+    if (form.car_id === "other" && !form.custom_vehicle?.trim()) {
+      toast.error("Please enter vehicle details");
+      return;
+    }
     setSaving(true);
     try {
       await api.post("/expenses", {
         category: form.category,
+        custom_category: form.custom_category,
         amount: Number(form.amount),
         date: form.date || new Date().toISOString().slice(0, 10),
         car_id: form.car_id !== "none" ? form.car_id : null,
+        custom_vehicle: form.custom_vehicle,
         payment_method: form.payment_method,
         description: form.description,
         driver_name: form.driver_name,
@@ -106,9 +114,11 @@ export default function ExpensesPage() {
       setModalOpen(false);
       setForm({
         category: "fuel",
+        custom_category: "",
         amount: "",
         date: new Date().toISOString().slice(0, 10),
         car_id: "none",
+        custom_vehicle: "",
         payment_method: "cash",
         description: "",
         driver_name: "",
@@ -134,15 +144,23 @@ export default function ExpensesPage() {
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
-      if (filterCat !== "all" && e.category !== filterCat) return false;
+      if (filterCat !== "all") {
+        if (filterCat === "other") {
+          const isPreset = ["fuel", "driver_payment", "wash", "challan"].includes(e.category);
+          if (isPreset) return false;
+        } else if (e.category !== filterCat) {
+          return false;
+        }
+      }
       if (filterCar !== "all" && e.car_id !== filterCar) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const desc = (e.description || "").toLowerCase();
+        const cat = (e.category || "").toLowerCase();
         const reg = (e.car_registration || "").toLowerCase();
         const model = (e.car_model || "").toLowerCase();
         const driver = (e.driver_name || "").toLowerCase();
-        if (!desc.includes(q) && !reg.includes(q) && !model.includes(q) && !driver.includes(q)) {
+        if (!desc.includes(q) && !cat.includes(q) && !reg.includes(q) && !model.includes(q) && !driver.includes(q)) {
           return false;
         }
       }
@@ -153,7 +171,7 @@ export default function ExpensesPage() {
   return (
     <AppLayout
       title="Expenses"
-      subtitle="Track owner personal & business out-of-pocket expenses (Fuel, FASTags, Driver Cash, Servicing & Washes)"
+      subtitle="Track owner out-of-pocket expenses (Fuel, Driver Cash, Car Washes, Traffic Challans & Custom Expenses)"
       actions={
         <Button
           onClick={() => setModalOpen(true)}
@@ -198,23 +216,6 @@ export default function ExpensesPage() {
         </Card>
 
         <Card
-          onClick={() => setFilterCat("fastag")}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-            filterCat === "fastag"
-              ? "bg-blue-800 text-white border-blue-800 shadow-sm"
-              : "bg-blue-50/40 border-blue-200 hover:border-blue-400"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold opacity-80 flex items-center gap-1">
-            <span>🏷️</span> FASTag
-          </div>
-          <div className={`font-display text-lg sm:text-xl font-extrabold mt-1 font-tabular ${filterCat === "fastag" ? "text-blue-200" : "text-blue-800"}`}>
-            {formatInr(summary.fastag_total)}
-          </div>
-          <div className="text-[10px] opacity-70 mt-0.5">Tolls & Tags</div>
-        </Card>
-
-        <Card
           onClick={() => setFilterCat("driver_payment")}
           className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
             filterCat === "driver_payment"
@@ -229,23 +230,6 @@ export default function ExpensesPage() {
             {formatInr(summary.driver_payment_total)}
           </div>
           <div className="text-[10px] opacity-70 mt-0.5">Spot duty cash</div>
-        </Card>
-
-        <Card
-          onClick={() => setFilterCat("service")}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-            filterCat === "service"
-              ? "bg-purple-800 text-white border-purple-800 shadow-sm"
-              : "bg-purple-50/40 border-purple-200 hover:border-purple-400"
-          }`}
-        >
-          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold opacity-80 flex items-center gap-1">
-            <span>🔧</span> Service
-          </div>
-          <div className={`font-display text-lg sm:text-xl font-extrabold mt-1 font-tabular ${filterCat === "service" ? "text-purple-200" : "text-purple-800"}`}>
-            {formatInr(summary.service_total)}
-          </div>
-          <div className="text-[10px] opacity-70 mt-0.5">Repairs & Garage</div>
         </Card>
 
         <Card
@@ -264,13 +248,47 @@ export default function ExpensesPage() {
           </div>
           <div className="text-[10px] opacity-70 mt-0.5">Washing & Detailing</div>
         </Card>
+
+        <Card
+          onClick={() => setFilterCat("challan")}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+            filterCat === "challan"
+              ? "bg-red-800 text-white border-red-800 shadow-sm"
+              : "bg-red-50/40 border-red-200 hover:border-red-400"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold opacity-80 flex items-center gap-1">
+            <span>⚠️</span> Challans
+          </div>
+          <div className={`font-display text-lg sm:text-xl font-extrabold mt-1 font-tabular ${filterCat === "challan" ? "text-red-200" : "text-red-800"}`}>
+            {formatInr(summary.challan_total)}
+          </div>
+          <div className="text-[10px] opacity-70 mt-0.5">Traffic fines</div>
+        </Card>
+
+        <Card
+          onClick={() => setFilterCat("other")}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+            filterCat === "other"
+              ? "bg-purple-800 text-white border-purple-800 shadow-sm"
+              : "bg-purple-50/40 border-purple-200 hover:border-purple-400"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold opacity-80 flex items-center gap-1">
+            <span>📝</span> Other / Custom
+          </div>
+          <div className={`font-display text-lg sm:text-xl font-extrabold mt-1 font-tabular ${filterCat === "other" ? "text-purple-200" : "text-purple-800"}`}>
+            {formatInr(summary.other_total)}
+          </div>
+          <div className="text-[10px] opacity-70 mt-0.5">Custom items</div>
+        </Card>
       </div>
 
       {/* Filter Bar */}
       <div className="bg-white border border-[#C3E7F1] rounded-2xl p-4 shadow-xs mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Category Dropdown */}
-          <div className="w-40 sm:w-48">
+          <div className="w-44 sm:w-52">
             <Select value={filterCat} onValueChange={setFilterCat}>
               <SelectTrigger className="h-8 text-xs border-[#C3E7F1] bg-[#F4FAFC]">
                 <SelectValue placeholder="All Categories" />
@@ -278,12 +296,10 @@ export default function ExpensesPage() {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 <SelectItem value="fuel">⛽ Fuel (Petrol / Diesel)</SelectItem>
-                <SelectItem value="fastag">🏷️ FASTag / Toll</SelectItem>
-                <SelectItem value="driver_payment">🚕 Driver Extra Cash</SelectItem>
-                <SelectItem value="service">🔧 Service / Repair</SelectItem>
+                <SelectItem value="driver_payment">🚕 Driver Cash</SelectItem>
                 <SelectItem value="wash">🧼 Car Wash</SelectItem>
                 <SelectItem value="challan">⚠️ Traffic Challan</SelectItem>
-                <SelectItem value="other">📝 Other</SelectItem>
+                <SelectItem value="other">📝 Other / Custom</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -311,7 +327,7 @@ export default function ExpensesPage() {
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search notes, plate, driver..."
+            placeholder="Search notes, custom name, plate..."
             className="h-8 text-xs border-[#C3E7F1] bg-[#F4FAFC]"
           />
         </div>
@@ -337,7 +353,11 @@ export default function ExpensesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {filteredExpenses.map((exp) => {
-              const meta = expenseCatMeta[exp.category] || expenseCatMeta.other;
+              const meta = expenseCatMeta[exp.category] || {
+                label: exp.category || "Custom Expense",
+                icon: "📝",
+                badge: "bg-purple-50 text-purple-800 border-purple-200",
+              };
               const isCash = exp.payment_method === "cash";
 
               return (
@@ -369,7 +389,7 @@ export default function ExpensesPage() {
                             {exp.car_registration}
                           </span>
                         )}
-                        {exp.car_model && (
+                        {exp.car_model && exp.car_model !== "Custom Vehicle" && (
                           <span className="text-slate-500 font-medium truncate max-w-[130px]">
                             {exp.car_model}
                           </span>
@@ -438,15 +458,25 @@ export default function ExpensesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fuel">⛽ Fuel (Petrol / Diesel)</SelectItem>
-                  <SelectItem value="fastag">🏷️ FASTag / Toll Recharge</SelectItem>
                   <SelectItem value="driver_payment">🚕 Driver Extra / Spot Payment</SelectItem>
-                  <SelectItem value="service">🔧 Service / Repair / Maintenance</SelectItem>
                   <SelectItem value="wash">🧼 Car Wash & Cleaning</SelectItem>
                   <SelectItem value="challan">⚠️ Traffic Challan / Fine</SelectItem>
-                  <SelectItem value="other">📝 Other Business Expense</SelectItem>
+                  <SelectItem value="other">📝 Other / Custom Expense</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {form.category === "other" && (
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Custom Expense Name / Type *</Label>
+                <Input
+                  placeholder="e.g. Insurance, Battery replacement, Tyre puncture, Parking..."
+                  value={form.custom_category}
+                  onChange={(e) => setForm((p) => ({ ...p, custom_category: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-medium"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -472,7 +502,7 @@ export default function ExpensesPage() {
             </div>
 
             <div>
-              <Label className="text-xs font-bold text-[#20373B]">Linked Vehicle (Optional)</Label>
+              <Label className="text-xs font-bold text-[#20373B]">Linked Vehicle</Label>
               <Select
                 value={form.car_id}
                 onValueChange={(v) => setForm((p) => ({ ...p, car_id: v }))}
@@ -481,15 +511,28 @@ export default function ExpensesPage() {
                   <SelectValue placeholder="General / Unspecified Vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">General / Unspecified Vehicle</SelectItem>
+                  <SelectItem value="none">🚗 General / Unspecified Vehicle</SelectItem>
                   {cars.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       🚗 {c.model} ({c.registration_no})
                     </SelectItem>
                   ))}
+                  <SelectItem value="other">✏️ Other / Custom Vehicle</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {form.car_id === "other" && (
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Custom Vehicle Details (Model / Plate) *</Label>
+                <Input
+                  placeholder="e.g. Personal Thar, Innova Crysta (GA-01-XX-1234)..."
+                  value={form.custom_vehicle}
+                  onChange={(e) => setForm((p) => ({ ...p, custom_vehicle: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-medium"
+                />
+              </div>
+            )}
 
             {form.category === "driver_payment" && (
               <div>
@@ -522,7 +565,7 @@ export default function ExpensesPage() {
             <div>
               <Label className="text-xs font-bold text-[#20373B]">Description / Note</Label>
               <Textarea
-                placeholder="e.g. Full tank petrol before airport trip, FASTag recharge on highway..."
+                placeholder="e.g. Full tank petrol before airport trip, parking charges..."
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                 className="mt-1 border-[#C3E7F1] text-xs min-h-[65px]"

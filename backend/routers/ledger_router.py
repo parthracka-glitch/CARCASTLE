@@ -186,8 +186,13 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
     total_car_profit = sum(f["car_profit"] for f in fin_list)
     total_transfer_profit = sum(f["transfer_profit"] for f in fin_list)
     total_margin = sum(f["margin"] for f in fin_list)
-    total_net_profit = sum(f["net_profit"] for f in fin_list)
-    savings_accrued = total_net_profit * (savings_pct / 100.0)
+
+    # Business / Out-of-pocket owner expenses deduction
+    business_expenses = await db.business_expenses.find({}, {"_id": 0}).to_list(5000)
+    total_expenses = sum(float(e.get("amount", 0)) for e in business_expenses)
+
+    total_net_profit = sum(f["net_profit"] for f in fin_list) - total_expenses
+    savings_accrued = max(0.0, total_net_profit) * (savings_pct / 100.0)
 
     # Cash vs Online payment methods
     total_cash_income = sum(f["total_income"] for b, f in zip(bookings, fin_list) if b.get("payment_method") != "online")
@@ -211,7 +216,7 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
             "income": 0.0, "car_income": 0.0, "transfer_income": 0.0,
             "owner_cost": 0.0, "driver_paid": 0.0, "agent_fee": 0.0,
             "car_profit": 0.0, "transfer_profit": 0.0,
-            "margin": 0.0, "net_profit": 0.0, "bookings": 0
+            "margin": 0.0, "net_profit": 0.0, "expenses": 0.0, "bookings": 0
         })
         by_month[m]["income"] += f["total_income"]
         by_month[m]["car_income"] += f["car_income"]
@@ -225,7 +230,23 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
         by_month[m]["net_profit"] += f["net_profit"]
         by_month[m]["bookings"] += 1
 
-    months = [{"month": k, **v, "savings": v["net_profit"] * (savings_pct / 100.0)}
+    # Subtract expenses from monthly net profit
+    for e in business_expenses:
+        m = _month_key(e.get("date", e.get("created_at", "")))
+        e_amt = float(e.get("amount", 0))
+        if m in by_month:
+            by_month[m]["expenses"] = by_month[m].get("expenses", 0.0) + e_amt
+            by_month[m]["net_profit"] -= e_amt
+        else:
+            by_month[m] = {
+                "income": 0.0, "car_income": 0.0, "transfer_income": 0.0,
+                "owner_cost": 0.0, "driver_paid": 0.0, "agent_fee": 0.0,
+                "car_profit": 0.0, "transfer_profit": 0.0,
+                "margin": 0.0, "net_profit": -e_amt,
+                "expenses": e_amt, "bookings": 0
+            }
+
+    months = [{"month": k, **v, "savings": max(0.0, v["net_profit"]) * (savings_pct / 100.0)}
               for k, v in sorted(by_month.items())]
 
     return {
@@ -242,6 +263,7 @@ async def finance_summary(user: dict = Depends(require_super_admin)):
         "total_car_profit": total_car_profit,
         "total_transfer_profit": total_transfer_profit,
         "total_margin": total_margin,
+        "total_expenses": total_expenses,
         "total_net_profit": total_net_profit,
         "savings_accrued": savings_accrued,
         "savings_percent": savings_pct,

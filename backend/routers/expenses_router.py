@@ -9,12 +9,14 @@ router = APIRouter(prefix="/expenses", tags=["business_expenses"])
 
 
 class BusinessExpenseIn(BaseModel):
-    category: str = "fuel"  # fuel, fastag, driver_payment, service, wash, challan, other
+    category: str = "fuel"  # fuel, driver_payment, wash, challan, other (or custom string)
+    custom_category: Optional[str] = ""
     amount: float
     date: Optional[str] = None
     car_id: Optional[str] = None
     car_registration: Optional[str] = None
     car_model: Optional[str] = None
+    custom_vehicle: Optional[str] = ""
     driver_name: Optional[str] = None
     payment_method: Optional[str] = "cash"  # cash, online
     description: Optional[str] = ""
@@ -66,12 +68,10 @@ async def get_expenses_summary(
         "count": len(expenses),
         "by_category": by_category,
         "fuel_total": by_category.get("fuel", 0.0),
-        "fastag_total": by_category.get("fastag", 0.0),
         "driver_payment_total": by_category.get("driver_payment", 0.0),
-        "service_total": by_category.get("service", 0.0),
         "wash_total": by_category.get("wash", 0.0),
         "challan_total": by_category.get("challan", 0.0),
-        "other_total": by_category.get("other", 0.0),
+        "other_total": sum(v for k, v in by_category.items() if k not in ["fuel", "driver_payment", "wash", "challan"]),
     }
 
 
@@ -86,20 +86,32 @@ async def create_expense(
     if amount <= 0:
         raise HTTPException(400, "Expense amount must be greater than 0")
 
+    category = payload.category.strip()
+    if category == "other" and payload.custom_category and payload.custom_category.strip():
+        category = payload.custom_category.strip()
+
     car_model = payload.car_model or ""
     car_reg = payload.car_registration or ""
-    if payload.car_id and payload.car_id != "none":
-        car = await db.cars.find_one({"id": payload.car_id})
+    car_id = payload.car_id
+
+    if car_id and car_id not in ["none", "other", "custom"]:
+        car = await db.cars.find_one({"id": car_id})
         if car:
             car_model = car.get("model", "")
             car_reg = car.get("registration_no", "")
+    elif car_id in ["other", "custom"] or (payload.custom_vehicle and payload.custom_vehicle.strip()):
+        car_id = "custom"
+        car_reg = (payload.custom_vehicle or "").strip()
+        car_model = "Custom Vehicle"
+    else:
+        car_id = None
 
     doc = {
         "id": new_id(),
-        "category": payload.category,
+        "category": category,
         "amount": amount,
         "date": payload.date or now_iso()[:10],
-        "car_id": payload.car_id if payload.car_id != "none" else None,
+        "car_id": car_id,
         "car_model": car_model,
         "car_registration": car_reg,
         "driver_name": (payload.driver_name or "").strip(),
@@ -113,7 +125,7 @@ async def create_expense(
     await db.business_expenses.insert_one(doc)
     await log_activity(
         db, user, "create", "business_expenses", doc["id"],
-        {"category": payload.category, "amount": amount, "car_reg": car_reg}
+        {"category": category, "amount": amount, "car_reg": car_reg}
     )
     doc.pop("_id", None)
     return doc

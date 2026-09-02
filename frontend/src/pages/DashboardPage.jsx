@@ -34,12 +34,10 @@ import {
 
 const expenseCatMeta = {
   fuel: { label: "Fuel", icon: "⛽", badge: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-  fastag: { label: "FASTag / Toll", icon: "🏷️", badge: "bg-blue-50 text-blue-800 border-blue-200" },
-  driver_payment: { label: "Driver Extra", icon: "🚕", badge: "bg-amber-50 text-amber-800 border-amber-200" },
-  service: { label: "Service / Repair", icon: "🔧", badge: "bg-purple-50 text-purple-800 border-purple-200" },
+  driver_payment: { label: "Driver Cash", icon: "🚕", badge: "bg-amber-50 text-amber-800 border-amber-200" },
   wash: { label: "Car Wash", icon: "🧼", badge: "bg-cyan-50 text-cyan-800 border-cyan-200" },
   challan: { label: "Traffic Challan", icon: "⚠️", badge: "bg-red-50 text-red-800 border-red-200" },
-  other: { label: "Other Expense", icon: "📝", badge: "bg-slate-100 text-slate-800 border-slate-200" },
+  other: { label: "Other / Custom", icon: "📝", badge: "bg-purple-50 text-purple-800 border-purple-200" },
 };
 
 export default function DashboardPage() {
@@ -70,9 +68,11 @@ export default function DashboardPage() {
   const [savingExpense, setSavingExpense] = useState(false);
   const [expenseForm, setExpenseForm] = useState({
     category: "fuel",
+    custom_category: "",
     amount: "",
     date: new Date().toISOString().slice(0, 10),
     car_id: "none",
+    custom_vehicle: "",
     payment_method: "cash",
     description: "",
     driver_name: "",
@@ -145,13 +145,23 @@ export default function DashboardPage() {
       toast.error("Please enter a valid expense amount");
       return;
     }
+    if (expenseForm.category === "other" && !expenseForm.custom_category?.trim()) {
+      toast.error("Please enter the custom expense name");
+      return;
+    }
+    if (expenseForm.car_id === "other" && !expenseForm.custom_vehicle?.trim()) {
+      toast.error("Please enter vehicle details");
+      return;
+    }
     setSavingExpense(true);
     try {
       await api.post("/expenses", {
         category: expenseForm.category,
+        custom_category: expenseForm.custom_category,
         amount: Number(expenseForm.amount),
         date: expenseForm.date || new Date().toISOString().slice(0, 10),
         car_id: expenseForm.car_id !== "none" ? expenseForm.car_id : null,
+        custom_vehicle: expenseForm.custom_vehicle,
         payment_method: expenseForm.payment_method,
         description: expenseForm.description,
         driver_name: expenseForm.driver_name,
@@ -160,14 +170,17 @@ export default function DashboardPage() {
       setExpenseModalOpen(false);
       setExpenseForm({
         category: "fuel",
+        custom_category: "",
         amount: "",
         date: new Date().toISOString().slice(0, 10),
         car_id: "none",
+        custom_vehicle: "",
         payment_method: "cash",
         description: "",
         driver_name: "",
       });
       await loadExpenses();
+      await loadData();
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || "Failed to record expense");
     } finally {
@@ -181,6 +194,7 @@ export default function DashboardPage() {
       await api.delete(`/expenses/${id}`);
       toast.success("Expense deleted");
       await loadExpenses();
+      await loadData();
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || "Failed to delete expense");
     }
@@ -365,7 +379,11 @@ export default function DashboardPage() {
           badge="Your Earnings"
           label="Net Profit (Take-Home)"
           value={formatInr(s.total_net_profit)}
-          sub={s.total_transfer_profit > 0 ? `Car profit: ${formatInr(s.total_car_profit || 0)} + Cab pickup profit: ${formatInr(s.total_transfer_profit || 0)}` : "What you keep after paying car rent & driver fees"}
+          sub={
+            Number(s.total_expenses || 0) > 0
+              ? `Car: ${formatInr(s.total_car_profit || 0)} + Cab: ${formatInr(s.total_transfer_profit || 0)} − Expenses: ${formatInr(s.total_expenses || 0)}`
+              : (s.total_transfer_profit > 0 ? `Car profit: ${formatInr(s.total_car_profit || 0)} + Cab pickup: ${formatInr(s.total_transfer_profit || 0)}` : "What you keep after paying car rent & driver fees")
+          }
           tone="positive"
           testid="kpi-net-profit"
         />
@@ -400,7 +418,7 @@ export default function DashboardPage() {
               Net Profit Formula Breakdown:
             </div>
             <div className="text-[11px] text-emerald-800">
-              (Total Booking + Airport Transfer) − Car Owner Rent − Driver Cut = <strong>Net Take-Home Profit</strong>
+              (Total Booking + Airport Transfer) − Car Owner Rent − Driver Cut − Expenses = <strong>Net Take-Home Profit</strong>
             </div>
           </div>
         </div>
@@ -412,6 +430,14 @@ export default function DashboardPage() {
           <span className="bg-white border border-emerald-300 px-2.5 py-1 rounded-md text-emerald-900 shadow-2xs">
             ✈️ Cab Pickup Profit: <strong className="font-tabular text-[#20373B]">{formatInr(s.total_transfer_profit || 0)}</strong>
           </span>
+          {Number(s.total_expenses || 0) > 0 && (
+            <>
+              <span className="text-red-600 font-bold">−</span>
+              <span className="bg-red-50 border border-red-200 px-2.5 py-1 rounded-md text-red-800 shadow-2xs">
+                🧾 Expenses: <strong className="font-tabular text-red-900">{formatInr(s.total_expenses)}</strong>
+              </span>
+            </>
+          )}
           <span className="text-emerald-700 font-bold">=</span>
           <span className="bg-emerald-600 text-white px-2.5 py-1 rounded-md font-bold shadow-2xs">
             {formatInr(s.total_net_profit)} Net Take-Home
@@ -479,7 +505,7 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* 6 Category Summary Quick Filter Pills */}
+        {/* Streamlined Category Summary Quick Filter Pills */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
           <div
             onClick={() => setExpenseFilterCat("all")}
@@ -512,22 +538,6 @@ export default function DashboardPage() {
           </div>
 
           <div
-            onClick={() => setExpenseFilterCat("fastag")}
-            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
-              expenseFilterCat === "fastag"
-                ? "bg-blue-800 text-white border-blue-800 shadow-xs"
-                : "bg-blue-50/60 border-blue-200 hover:border-blue-400 text-blue-900"
-            }`}
-          >
-            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
-              <span>🏷️</span> FASTag
-            </div>
-            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "fastag" ? "text-blue-200" : "text-blue-800"}`}>
-              {formatInr(expensesSummary.fastag_total)}
-            </div>
-          </div>
-
-          <div
             onClick={() => setExpenseFilterCat("driver_payment")}
             className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
               expenseFilterCat === "driver_payment"
@@ -540,22 +550,6 @@ export default function DashboardPage() {
             </div>
             <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "driver_payment" ? "text-amber-200" : "text-amber-800"}`}>
               {formatInr(expensesSummary.driver_payment_total)}
-            </div>
-          </div>
-
-          <div
-            onClick={() => setExpenseFilterCat("service")}
-            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
-              expenseFilterCat === "service"
-                ? "bg-purple-800 text-white border-purple-800 shadow-xs"
-                : "bg-purple-50/60 border-purple-200 hover:border-purple-400 text-purple-900"
-            }`}
-          >
-            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
-              <span>🔧</span> Service
-            </div>
-            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "service" ? "text-purple-200" : "text-purple-800"}`}>
-              {formatInr(expensesSummary.service_total)}
             </div>
           </div>
 
@@ -574,13 +568,49 @@ export default function DashboardPage() {
               {formatInr(expensesSummary.wash_total)}
             </div>
           </div>
+
+          <div
+            onClick={() => setExpenseFilterCat("challan")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "challan"
+                ? "bg-red-800 text-white border-red-800 shadow-xs"
+                : "bg-red-50/60 border-red-200 hover:border-red-400 text-red-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>⚠️</span> Challan
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "challan" ? "text-red-200" : "text-red-800"}`}>
+              {formatInr(expensesSummary.challan_total)}
+            </div>
+          </div>
+
+          <div
+            onClick={() => setExpenseFilterCat("other")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "other"
+                ? "bg-purple-800 text-white border-purple-800 shadow-xs"
+                : "bg-purple-50/60 border-purple-200 hover:border-purple-400 text-purple-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>📝</span> Other / Custom
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "other" ? "text-purple-200" : "text-purple-800"}`}>
+              {formatInr(expensesSummary.other_total)}
+            </div>
+          </div>
         </div>
 
         {/* Expenses List */}
         {(() => {
-          const filtered = expensesList.filter((e) =>
-            expenseFilterCat === "all" ? true : e.category === expenseFilterCat
-          );
+          const filtered = expensesList.filter((e) => {
+            if (expenseFilterCat === "all") return true;
+            if (expenseFilterCat === "other") {
+              return e.category === "other" || !["fuel", "driver_payment", "wash", "challan"].includes(e.category);
+            }
+            return e.category === expenseFilterCat;
+          });
 
           if (filtered.length === 0) {
             return (
@@ -592,7 +622,7 @@ export default function DashboardPage() {
                     : `No expenses logged under ${expenseCatMeta[expenseFilterCat]?.label || expenseFilterCat}.`}
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Click "+ Record Expense" to log personal fuel, FASTags, extra driver cash, or car repairs.
+                  Click "+ Record Expense" to log personal fuel, extra driver cash, car washes, or any custom expense.
                 </p>
                 <Button
                   size="sm"
@@ -615,7 +645,11 @@ export default function DashboardPage() {
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {filtered.slice(0, 12).map((exp) => {
-                const meta = expenseCatMeta[exp.category] || expenseCatMeta.other;
+                const meta = expenseCatMeta[exp.category] || {
+                  label: exp.category || "Custom Expense",
+                  icon: "📝",
+                  badge: "bg-purple-50 text-purple-800 border-purple-200",
+                };
                 const isCash = exp.payment_method === "cash";
 
                 return (
@@ -778,15 +812,25 @@ export default function DashboardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fuel">⛽ Fuel (Petrol / Diesel)</SelectItem>
-                  <SelectItem value="fastag">🏷️ FASTag / Toll Recharge</SelectItem>
                   <SelectItem value="driver_payment">🚕 Driver Extra / Spot Payment</SelectItem>
-                  <SelectItem value="service">🔧 Service / Repair / Maintenance</SelectItem>
                   <SelectItem value="wash">🧼 Car Wash & Cleaning</SelectItem>
                   <SelectItem value="challan">⚠️ Traffic Challan / Fine</SelectItem>
-                  <SelectItem value="other">📝 Other Business Expense</SelectItem>
+                  <SelectItem value="other">📝 Other / Custom Expense</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {expenseForm.category === "other" && (
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Custom Expense Name / Type *</Label>
+                <Input
+                  placeholder="e.g. Insurance, Battery replacement, Tyre puncture, Parking..."
+                  value={expenseForm.custom_category}
+                  onChange={(e) => setExpenseForm((p) => ({ ...p, custom_category: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-medium"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -812,7 +856,7 @@ export default function DashboardPage() {
             </div>
 
             <div>
-              <Label className="text-xs font-bold text-[#20373B]">Linked Vehicle (Optional)</Label>
+              <Label className="text-xs font-bold text-[#20373B]">Linked Vehicle</Label>
               <Select
                 value={expenseForm.car_id}
                 onValueChange={(v) => setExpenseForm((p) => ({ ...p, car_id: v }))}
@@ -821,15 +865,28 @@ export default function DashboardPage() {
                   <SelectValue placeholder="General / Unspecified Vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">General / Unspecified Vehicle</SelectItem>
+                  <SelectItem value="none">🚗 General / Unspecified Vehicle</SelectItem>
                   {carsList.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       🚗 {c.model} ({c.registration_no})
                     </SelectItem>
                   ))}
+                  <SelectItem value="other">✏️ Other / Custom Vehicle</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {expenseForm.car_id === "other" && (
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Custom Vehicle Details (Model / Plate) *</Label>
+                <Input
+                  placeholder="e.g. Personal Thar, Innova Crysta (GA-01-XX-1234)..."
+                  value={expenseForm.custom_vehicle}
+                  onChange={(e) => setExpenseForm((p) => ({ ...p, custom_vehicle: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-medium"
+                />
+              </div>
+            )}
 
             {expenseForm.category === "driver_payment" && (
               <div>
