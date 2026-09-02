@@ -10,6 +10,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import EnquiriesPage from "@/pages/EnquiriesPage";
 import BookingsPage from "@/pages/BookingsPage";
 import TransfersPage from "@/pages/TransfersPage";
+import ExpensesPage from "@/pages/ExpensesPage";
 import EntitiesPage from "@/pages/EntitiesPage";
 import EntityLedgerPage from "@/pages/EntityLedgerPage";
 import CarsPage from "@/pages/CarsPage";
@@ -43,6 +44,7 @@ function AppRoutes() {
       <Route path="/enquiries" element={<Protected><EnquiriesPage /></Protected>} />
       <Route path="/bookings" element={<Protected><BookingsPage /></Protected>} />
       <Route path="/transfers" element={<Protected><TransfersPage /></Protected>} />
+      <Route path="/expenses" element={<Protected><ExpensesPage /></Protected>} />
       <Route path="/owners" element={<Protected><EntitiesPage type="owner" /></Protected>} />
       <Route path="/owners/:id" element={<Protected><EntityLedgerPage type="owner" /></Protected>} />
       <Route path="/agents" element={<Protected superOnly><EntitiesPage type="agent" /></Protected>} />

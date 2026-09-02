@@ -15,6 +15,7 @@ import {
   LogOut,
   X,
   MessageSquareQuote,
+  Receipt,
 } from "lucide-react";
 
 const nav = [
@@ -22,8 +23,8 @@ const nav = [
   { to: "/enquiries", icon: MessageSquareQuote, label: "Enquiries & Leads", roles: ["super_admin", "operator"] },
   { to: "/bookings", icon: CalendarClock, label: "Bookings", roles: ["super_admin", "operator"] },
   { to: "/transfers", icon: Plane, label: "Airport Transfers", roles: ["super_admin", "operator"] },
+  { to: "/expenses", icon: Receipt, label: "Expenses", roles: ["super_admin", "operator"] },
   { to: "/owners", icon: Users, label: "Car Owners", roles: ["super_admin", "operator"] },
-  { to: "/agents", icon: UserCog, label: "Car Drivers", roles: ["super_admin"] },
   { to: "/cars", icon: Car, label: "Cars", roles: ["super_admin"] },
   { to: "/ledger", icon: Wallet, label: "Payouts & Dues", roles: ["super_admin"] },
   { to: "/finance", icon: LineChart, label: "Finance & Savings", roles: ["super_admin"] },
