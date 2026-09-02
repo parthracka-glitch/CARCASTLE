@@ -145,6 +145,8 @@ class BookingCreate(BaseModel):
     drop_price: Optional[float] = 0.0
     cost_rate: float  # total paid to owner (₹)
     customer_rate: float  # total charged to customer (₹)
+    advance_payment: Optional[float] = 0.0  # advance paid by client
+    balance_due: Optional[float] = 0.0  # remaining amount client needs to pay
     payment_method: Optional[PaymentMethod] = "cash"
     deposit_amount: Optional[float] = 0.0
     deposit_status: Optional[DepositStatus] = "none"
@@ -190,6 +192,8 @@ class BookingUpdate(BaseModel):
     drop_price: Optional[float] = None
     cost_rate: Optional[float] = None
     customer_rate: Optional[float] = None
+    advance_payment: Optional[float] = None
+    balance_due: Optional[float] = None
     payment_method: Optional[PaymentMethod] = None
     deposit_amount: Optional[float] = None
     deposit_status: Optional[DepositStatus] = None

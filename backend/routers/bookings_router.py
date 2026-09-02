@@ -303,7 +303,13 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     margin = car_profit + transfer_profit
     net_profit = margin - agent_fee
 
+    advance_payment = float(payload.advance_payment or 0.0)
+    total_customer_bill = customer_rate + transfer_cost
+    balance_due = max(0.0, total_customer_bill - advance_payment)
+
     booking_dict["customer_rate"] = customer_rate
+    booking_dict["advance_payment"] = advance_payment
+    booking_dict["balance_due"] = balance_due
     booking_dict["car_profit"] = car_profit
     booking_dict["transfer_profit"] = transfer_profit
 
@@ -455,6 +461,10 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
     updates["transfer_profit"] = max(0.0, t_cost - d_share)
     updates["margin"] = (new_customer + t_cost) - new_cost - d_share
     updates["net_profit"] = updates["margin"] - new_agent_fee
+
+    adv = float(updates.get("advance_payment", old.get("advance_payment", 0.0)))
+    updates["balance_due"] = max(0.0, (new_customer + t_cost) - adv)
+
     updates["updated_at"] = now_iso()
 
     await db.bookings.update_one({"id": booking_id}, {"$set": updates})

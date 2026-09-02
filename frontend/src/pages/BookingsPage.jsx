@@ -33,6 +33,7 @@ const empty = {
   daily_cost_rate: "", daily_customer_rate: "",
   cost_rate: "", customer_rate: "",
   payment_method: "cash",
+  advance_payment: "",
   deposit_amount: "3000", deposit_status: "received",
   transfer_type: "none",
   transfer_handled_by: "self",
@@ -141,6 +142,8 @@ export default function BookingsPage() {
       const totalCarCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
       const totalCustomer = totalCarCustomer + locTransferTotal;
       const depositAmt = Number(form.deposit_amount || 0);
+      const advAmt = Number(form.advance_payment || 0);
+      const balanceDue = Math.max(0, totalCustomer - advAmt);
 
       const isDirect = form.car_selection_mode === "direct";
       const tType = (pPrice > 0 && dPrice > 0) ? "both" : (pPrice > 0 ? "airport_pickup" : (dPrice > 0 ? "airport_drop" : (form.transfer_type || "none")));
@@ -157,6 +160,8 @@ export default function BookingsPage() {
         pickup_time: form.pickup_time || "09:00",
         drop_time: form.drop_time || "09:00",
         payment_method: form.payment_method || "cash",
+        advance_payment: advAmt,
+        balance_due: balanceDue,
         deposit_amount: depositAmt,
         deposit_status: depositAmt > 0 ? (form.deposit_status || "received") : "none",
         daily_cost_rate: dailyCost,
@@ -218,6 +223,7 @@ export default function BookingsPage() {
       pickup_time: b.pickup_time || "09:00",
       drop_time: b.drop_time || "09:00",
       payment_method: b.payment_method || "cash",
+      advance_payment: b.advance_payment !== undefined && b.advance_payment !== null ? String(b.advance_payment) : "",
       deposit_amount: String(b.deposit_amount ?? "0"),
       deposit_status: b.deposit_status || "none",
       pickup_location: b.pickup_location || "",
@@ -363,6 +369,8 @@ export default function BookingsPage() {
   const hasTransfer = totalTransferPrice > 0 || (form.transfer_type && form.transfer_type !== "none");
   const computedTransferCost = totalTransferPrice > 0 ? totalTransferPrice : (hasTransfer ? Number(form.transfer_cost || 0) : 0);
   const computedTotalCustomer = computedCarCustomer + computedTransferCost;
+  const advPayment = Number(form.advance_payment || 0);
+  const computedBalanceDue = Math.max(0, computedTotalCustomer - advPayment);
   const computedCarProfit = computedCarCustomer - computedTotalCost;
   const computedTransferProfit = computedTransferCost;
   const computedMargin = computedCarProfit + computedTransferProfit;
@@ -765,6 +773,81 @@ export default function BookingsPage() {
                 </Field>
               )}
 
+              {/* 💵 Advance Payment & Client Balance Due */}
+              <div className="sm:col-span-2 p-3.5 bg-gradient-to-r from-[#F4FAFC] to-blue-50/50 border border-[#C3E7F1] rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[#20373B] flex items-center gap-1.5">
+                    <span>💵</span> Advance Payment & Balance Due
+                  </span>
+                  {computedTotalCustomer > 0 && (
+                    <span className="text-[11px] font-bold text-slate-500 font-tabular">
+                      Total Bill: {formatInr(computedTotalCustomer)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-700">Advance Payment Received (₹)</Label>
+                    <Input
+                      type="number"
+                      value={form.advance_payment}
+                      onChange={(e) => setForm({ ...form, advance_payment: e.target.value })}
+                      placeholder="e.g. 1000 (0 if nothing paid yet)"
+                      className="mt-1 text-xs bg-white font-tabular font-bold text-emerald-900 border-[#C3E7F1]"
+                      data-testid="booking-advance-payment-input"
+                    />
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      {[
+                        { label: "₹0 (None)", amt: "0" },
+                        { label: "₹1,000", amt: "1000" },
+                        { label: "₹2,000", amt: "2000" },
+                        { label: "Full Paid", amt: String(computedTotalCustomer || 0) },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => setForm({ ...form, advance_payment: item.amt })}
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition-all ${
+                            form.advance_payment === item.amt
+                              ? "bg-[#20373B] text-[#FFC64F] border-[#20373B]"
+                              : "bg-white border-[#C3E7F1] text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Real-time Remaining Balance Box */}
+                  <div className={`p-3 rounded-lg border flex flex-col justify-between ${
+                    computedBalanceDue <= 0 && computedTotalCustomer > 0
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+                      : "bg-amber-50/80 border-amber-300 text-amber-950"
+                  }`}>
+                    <div className="text-[11px] font-bold uppercase tracking-wider opacity-80 flex items-center justify-between">
+                      <span>Remaining Balance Due</span>
+                      {computedBalanceDue <= 0 && computedTotalCustomer > 0 ? (
+                        <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-extrabold">
+                          Paid in Full
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-extrabold">
+                          Pending Collection
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-display font-extrabold text-xl font-tabular mt-1 text-amber-900">
+                      {formatInr(computedBalanceDue)}
+                    </div>
+                    <div className="text-[10px] opacity-75 mt-0.5">
+                      Client needs to pay this remaining amount on handover / return
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="sm:col-span-2">
                 <Field label="Notes">
                   <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Customer preferences, advance payment details..." />
@@ -784,9 +867,9 @@ export default function BookingsPage() {
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-1">
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Customer Bill</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Bill</div>
                       <div className="font-extrabold font-tabular text-[#20373B] text-base mt-0.5">{formatInr(computedTotalCustomer)}</div>
                       <div className="text-[9px] text-slate-500 font-tabular mt-0.5">
                         Car {formatInr(computedCarCustomer)}
@@ -795,14 +878,19 @@ export default function BookingsPage() {
                       </div>
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Advance Paid</div>
+                      <div className="font-bold font-tabular text-emerald-700 text-sm mt-0.5">{formatInr(advPayment)}</div>
+                      <div className="text-[9px] text-slate-400 font-tabular">Received</div>
+                    </div>
+                    <div className={`p-2 rounded-lg border ${computedBalanceDue > 0 ? "bg-amber-50 border-amber-300" : "bg-white border-[#C3E7F1]"}`}>
+                      <div className="text-[10px] text-amber-900 font-semibold uppercase">Remaining Due</div>
+                      <div className="font-extrabold font-tabular text-amber-900 text-sm mt-0.5">{formatInr(computedBalanceDue)}</div>
+                      <div className="text-[9px] text-amber-800 font-medium">{computedBalanceDue > 0 ? "To collect" : "All cleared"}</div>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
                       <div className="text-[10px] text-slate-400 font-semibold uppercase">Car Owner Rent</div>
                       <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost)}</div>
                       <div className="text-[9px] text-slate-400 font-tabular">{days} days × ₹{form.daily_cost_rate || 0}</div>
-                    </div>
-                    <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Gross Margin</div>
-                      <div className="font-bold font-tabular text-emerald-700 text-sm mt-0.5">{formatInr(computedMargin)}</div>
-                      <div className="text-[9px] text-emerald-600 font-tabular">Car ₹{Math.round(computedCarProfit)} + Transfers ₹{totalTransferPrice}</div>
                     </div>
                     <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
                       <div className="text-[10px] text-emerald-800 font-semibold uppercase">Net Take-Home</div>
@@ -949,6 +1037,30 @@ export default function BookingsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Advance & Balance Due Strip */}
+                {(() => {
+                  const totalBill = Number(b.customer_rate || 0) + Number(b.transfer_cost || 0);
+                  const adv = Number(b.advance_payment || 0);
+                  const due = b.balance_due !== undefined && b.balance_due !== null ? Number(b.balance_due) : Math.max(0, totalBill - adv);
+                  if (totalBill <= 0) return null;
+
+                  return (
+                    <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md border text-xs ${
+                      due <= 0 ? "bg-emerald-50/70 border-emerald-200 text-emerald-950" : "bg-amber-50/70 border-amber-200 text-amber-950"
+                    }`}>
+                      <span className="flex items-center gap-1 font-medium">
+                        <span>💵</span>
+                        <span>Advance: <strong>{formatInr(adv)}</strong></span>
+                      </span>
+                      <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                        due <= 0 ? "bg-emerald-200 text-emerald-900" : "bg-amber-200 text-amber-900"
+                      }`}>
+                        {due <= 0 ? "Paid in Full" : `Due: ${formatInr(due)}`}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* Financials Strip */}
                 {(() => {
@@ -1106,12 +1218,33 @@ export default function BookingsPage() {
                       <div className="text-[11px] text-slate-400">Owner: {b.owner_name || "—"}</div>
                     </td>
                     <td className="px-5 py-2.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        isCash ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-blue-50 text-blue-800 border border-blue-200"
-                      }`}>
-                        {isCash ? <Banknote className="w-3 h-3 text-emerald-600" /> : <CreditCard className="w-3 h-3 text-blue-600" />}
-                        {isCash ? "Cash" : "Online"}
-                      </span>
+                      <div className="space-y-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          isCash ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-blue-50 text-blue-800 border border-blue-200"
+                        }`}>
+                          {isCash ? <Banknote className="w-3 h-3 text-emerald-600" /> : <CreditCard className="w-3 h-3 text-blue-600" />}
+                          {isCash ? "Cash" : "Online"}
+                        </span>
+                        {(() => {
+                          const tot = Number(b.customer_rate || 0) + Number(b.transfer_cost || 0);
+                          const adv = Number(b.advance_payment || 0);
+                          const due = b.balance_due !== undefined && b.balance_due !== null ? Number(b.balance_due) : Math.max(0, tot - adv);
+                          if (tot <= 0) return null;
+                          return (
+                            <div>
+                              {due > 0 ? (
+                                <span className="inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                  Due: {formatInr(due)}
+                                </span>
+                              ) : (
+                                <span className="inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  Paid in Full
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </td>
                     <td className="px-5 py-2.5 whitespace-nowrap">
                       {depAmt > 0 ? (
