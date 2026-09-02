@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download, Fuel, Droplets, Plane } from "lucide-react";
+import { Plus, Search, ShieldCheck, CreditCard, Banknote, RefreshCw, Table2, FileText, Download, Fuel, Droplets, Plane, User, Car } from "lucide-react";
 
 const empty = {
   customer_name: "", customer_contact: "", customer_id_proof: "",
