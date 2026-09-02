@@ -140,7 +140,9 @@ class BookingCreate(BaseModel):
     daily_cost_rate: Optional[float] = 0.0
     daily_customer_rate: Optional[float] = 0.0
     pickup_location: str
+    pickup_price: Optional[float] = 0.0
     drop_location: str
+    drop_price: Optional[float] = 0.0
     cost_rate: float  # total paid to owner (₹)
     customer_rate: float  # total charged to customer (₹)
     payment_method: Optional[PaymentMethod] = "cash"
@@ -183,7 +185,9 @@ class BookingUpdate(BaseModel):
     daily_cost_rate: Optional[float] = None
     daily_customer_rate: Optional[float] = None
     pickup_location: Optional[str] = None
+    pickup_price: Optional[float] = None
     drop_location: Optional[str] = None
+    drop_price: Optional[float] = None
     cost_rate: Optional[float] = None
     customer_rate: Optional[float] = None
     payment_method: Optional[PaymentMethod] = None

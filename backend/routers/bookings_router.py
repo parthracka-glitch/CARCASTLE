@@ -235,9 +235,30 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
     booking_dict["drop_time"] = payload.drop_time or "09:00"
     booking_dict["payment_method"] = payload.payment_method or "cash"
 
+    pickup_price = float(payload.pickup_price or 0.0)
+    drop_price = float(payload.drop_price or 0.0)
+    total_loc_price = pickup_price + drop_price
+    booking_dict["pickup_price"] = pickup_price
+    booking_dict["drop_price"] = drop_price
+
     # Transfer breakdown
-    if payload.transfer_type != "none":
-        transfer_cost = float(payload.transfer_cost if payload.transfer_cost is not None else 1000.0)
+    if total_loc_price > 0 and (payload.transfer_type == "none" or not payload.transfer_type):
+        transfer_cost = total_loc_price
+        transfer_type = "both" if (pickup_price > 0 and drop_price > 0) else ("airport_pickup" if pickup_price > 0 else "airport_drop")
+        booking_dict["transfer_type"] = transfer_type
+        booking_dict["transfer_cost"] = transfer_cost
+        booking_dict["transfer_handled_by"] = "self"
+        booking_dict["driver_name"] = "Owner (Self)"
+        booking_dict["driver_contact"] = ""
+        booking_dict["driver_fee"] = 0.0
+        booking_dict["transfer_driver_share"] = 0.0
+        booking_dict["transfer_manoj_share"] = transfer_cost
+        booking_dict["transfer_driver_paid"] = True
+        booking_dict["transfer_manoj_paid"] = False
+        transfer_driver_cut = 0.0
+        transfer_profit = transfer_cost
+    elif payload.transfer_type != "none":
+        transfer_cost = float(payload.transfer_cost if payload.transfer_cost is not None else (total_loc_price if total_loc_price > 0 else 1000.0))
         booking_dict["transfer_cost"] = transfer_cost
 
         handled_by = payload.transfer_handled_by
@@ -409,8 +430,18 @@ async def update_booking(booking_id: str, payload: BookingUpdate, user: dict = D
     new_customer = float(updates.get("customer_rate", old["customer_rate"]))
     new_agent_fee = float(updates.get("agent_fee", old.get("agent_fee", 0)))
 
+    p_price = float(updates.get("pickup_price", old.get("pickup_price", 0.0)))
+    d_price = float(updates.get("drop_price", old.get("drop_price", 0.0)))
     t_type = updates.get("transfer_type", old.get("transfer_type", "none"))
-    t_cost = float(updates.get("transfer_cost", old.get("transfer_cost", 1000.0))) if t_type != "none" else 0.0
+
+    if (p_price > 0 or d_price > 0) and (t_type == "none" or not t_type):
+        t_type = "both" if (p_price > 0 and d_price > 0) else ("airport_pickup" if p_price > 0 else "airport_drop")
+        t_cost = p_price + d_price
+        updates["transfer_type"] = t_type
+        updates["transfer_cost"] = t_cost
+    else:
+        t_cost = float(updates.get("transfer_cost", old.get("transfer_cost", 1000.0))) if t_type != "none" else 0.0
+
     h_by = updates.get("transfer_handled_by", old.get("transfer_handled_by", "self"))
     d_share = float(updates.get("transfer_driver_share", old.get("transfer_driver_share", (old.get("driver_fee") or 400.0)))) if (t_type != "none" and h_by == "driver") else 0.0
 

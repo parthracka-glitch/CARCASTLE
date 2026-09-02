@@ -28,16 +28,17 @@ const empty = {
   car_registration: "TBD",
   start_date: "", end_date: "",
   pickup_time: "09:00", drop_time: "09:00",
-  pickup_location: "", drop_location: "",
+  pickup_location: "", pickup_price: "",
+  drop_location: "", drop_price: "",
   daily_cost_rate: "", daily_customer_rate: "",
   cost_rate: "", customer_rate: "",
   payment_method: "cash",
   deposit_amount: "3000", deposit_status: "received",
   transfer_type: "none",
   transfer_handled_by: "self",
-  transfer_cost: "1000",
+  transfer_cost: "0",
   transfer_driver_share: "0",
-  transfer_manoj_share: "1000",
+  transfer_manoj_share: "0",
   driver_name: "Owner (Self)",
   driver_contact: "",
   transfer_driver_paid: true,
@@ -134,10 +135,15 @@ export default function BookingsPage() {
       const dailyCost = Number(form.daily_cost_rate || (form.cost_rate ? Number(form.cost_rate) / calcDays : 0));
       const dailyCustomer = Number(form.daily_customer_rate || (form.customer_rate ? Number(form.customer_rate) / calcDays : 0));
       const totalCost = Number(form.cost_rate || (dailyCost * calcDays));
-      const totalCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
+      const pPrice = Number(form.pickup_price || 0);
+      const dPrice = Number(form.drop_price || 0);
+      const locTransferTotal = pPrice + dPrice;
+      const totalCarCustomer = Number(form.customer_rate || (dailyCustomer * calcDays));
+      const totalCustomer = totalCarCustomer + locTransferTotal;
       const depositAmt = Number(form.deposit_amount || 0);
 
       const isDirect = form.car_selection_mode === "direct";
+      const tType = (pPrice > 0 && dPrice > 0) ? "both" : (pPrice > 0 ? "airport_pickup" : (dPrice > 0 ? "airport_drop" : (form.transfer_type || "none")));
 
       const payload = {
         ...form,
@@ -157,16 +163,20 @@ export default function BookingsPage() {
         daily_customer_rate: dailyCustomer,
         cost_rate: totalCost,
         customer_rate: totalCustomer,
+        pickup_location: form.pickup_location || "",
+        pickup_price: pPrice,
+        drop_location: form.drop_location || "",
+        drop_price: dPrice,
         agent_fee: Number(form.agent_fee || 0),
         assigned_agent_id: form.assigned_agent_id || null,
-        transfer_type: form.transfer_type || "none",
-        transfer_handled_by: form.transfer_handled_by || "self",
-        transfer_cost: Number(form.transfer_cost || (form.transfer_type === "both" ? 2000 : 1000)),
-        transfer_driver_share: form.transfer_handled_by === "self" ? 0 : Number(form.transfer_driver_share || 400),
-        transfer_manoj_share: form.transfer_handled_by === "self" ? Number(form.transfer_cost || 1000) : Number(form.transfer_manoj_share || 600),
-        transfer_driver_paid: form.transfer_handled_by === "self" ? true : Boolean(form.transfer_driver_paid),
-        driver_name: form.transfer_handled_by === "self" ? "Owner (Self)" : (form.driver_name || "Driver"),
-        driver_contact: form.driver_contact || "",
+        transfer_type: tType,
+        transfer_handled_by: "self",
+        transfer_cost: locTransferTotal,
+        transfer_driver_share: 0,
+        transfer_manoj_share: locTransferTotal,
+        transfer_driver_paid: true,
+        driver_name: "Owner (Self)",
+        driver_contact: "",
         flight_time: form.flight_time || "",
         transfer_pickup_point: form.transfer_pickup_point || "",
       };
@@ -211,16 +221,18 @@ export default function BookingsPage() {
       deposit_amount: String(b.deposit_amount ?? "0"),
       deposit_status: b.deposit_status || "none",
       pickup_location: b.pickup_location || "",
+      pickup_price: b.pickup_price !== undefined && b.pickup_price !== null ? String(b.pickup_price) : (b.transfer_cost && (b.transfer_type === "airport_pickup" || b.transfer_type === "both") ? String(b.transfer_type === "both" ? Number(b.transfer_cost) / 2 : b.transfer_cost) : ""),
       drop_location: b.drop_location || "",
+      drop_price: b.drop_price !== undefined && b.drop_price !== null ? String(b.drop_price) : (b.transfer_cost && (b.transfer_type === "airport_drop" || b.transfer_type === "both") ? String(b.transfer_type === "both" ? Number(b.transfer_cost) / 2 : b.transfer_cost) : ""),
       daily_cost_rate: dCost ? String(dCost) : "",
       daily_customer_rate: dCust ? String(dCust) : "",
       cost_rate: b.cost_rate ? String(b.cost_rate) : "",
       customer_rate: b.customer_rate ? String(b.customer_rate) : "",
       transfer_type: b.transfer_type || "none",
       transfer_handled_by: b.transfer_handled_by || (b.driver_name === "Owner (Self)" || Number(b.driver_fee) === 0 ? "self" : "driver"),
-      transfer_cost: String(b.transfer_cost || (b.transfer_type === "both" ? 2000 : 1000)),
+      transfer_cost: String(b.transfer_cost || 0),
       transfer_driver_share: String(b.transfer_driver_share ?? 0),
-      transfer_manoj_share: String(b.transfer_manoj_share ?? (b.transfer_cost || 1000)),
+      transfer_manoj_share: String(b.transfer_manoj_share ?? (b.transfer_cost || 0)),
       transfer_driver_paid: Boolean(b.transfer_driver_paid),
       driver_name: b.driver_name || "Owner (Self)",
       driver_contact: b.driver_contact || "",
@@ -345,12 +357,14 @@ export default function BookingsPage() {
 
   const computedCarCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
   const computedTotalCost = form.daily_cost_rate ? Number(form.daily_cost_rate) * days : Number(form.cost_rate || 0);
-  const hasTransfer = form.transfer_type && form.transfer_type !== "none";
-  const computedTransferCost = hasTransfer ? Number(form.transfer_cost || (form.transfer_type === "both" ? 2000 : 1000)) : 0;
-  const computedDriverCut = (hasTransfer && form.transfer_handled_by === "driver") ? Number(form.transfer_driver_share || 400) : 0;
+  const pickupPrice = Number(form.pickup_price || 0);
+  const dropPrice = Number(form.drop_price || 0);
+  const totalTransferPrice = pickupPrice + dropPrice;
+  const hasTransfer = totalTransferPrice > 0 || (form.transfer_type && form.transfer_type !== "none");
+  const computedTransferCost = totalTransferPrice > 0 ? totalTransferPrice : (hasTransfer ? Number(form.transfer_cost || 0) : 0);
   const computedTotalCustomer = computedCarCustomer + computedTransferCost;
   const computedCarProfit = computedCarCustomer - computedTotalCost;
-  const computedTransferProfit = computedTransferCost - computedDriverCut;
+  const computedTransferProfit = computedTransferCost;
   const computedMargin = computedCarProfit + computedTransferProfit;
   const computedNet = computedMargin - Number(form.agent_fee || 0);
 
@@ -640,12 +654,57 @@ export default function BookingsPage() {
                 </div>
               </div>
 
-              <Field label="Pickup location">
-                <Input value={form.pickup_location} onChange={(e) => setForm({ ...form, pickup_location: e.target.value })} placeholder="e.g. MOPA Airport / Panjim" />
-              </Field>
-              <Field label="Drop location">
-                <Input value={form.drop_location} onChange={(e) => setForm({ ...form, drop_location: e.target.value })} placeholder="e.g. Calangute / Airport" />
-              </Field>
+              {/* 🛫 Pickup Section */}
+              <div className="p-3.5 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-[#20373B]">
+                  <span>🛫</span> Pickup Details
+                </div>
+                <div>
+                  <Label className="text-[11px] font-medium text-slate-600">Pickup Location</Label>
+                  <Input
+                    value={form.pickup_location}
+                    onChange={(e) => setForm({ ...form, pickup_location: e.target.value })}
+                    placeholder="e.g. MOPA Airport / Panjim / Hotel"
+                    className="mt-1 text-xs bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-medium text-slate-600">Pickup Price (₹)</Label>
+                  <Input
+                    type="number"
+                    value={form.pickup_price}
+                    onChange={(e) => setForm({ ...form, pickup_price: e.target.value })}
+                    placeholder="e.g. 1000 (0 if included)"
+                    className="mt-1 text-xs bg-white font-tabular font-bold text-[#20373B]"
+                  />
+                </div>
+              </div>
+
+              {/* 🛬 Drop Section */}
+              <div className="p-3.5 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-[#20373B]">
+                  <span>🛬</span> Drop-off Details
+                </div>
+                <div>
+                  <Label className="text-[11px] font-medium text-slate-600">Drop Location</Label>
+                  <Input
+                    value={form.drop_location}
+                    onChange={(e) => setForm({ ...form, drop_location: e.target.value })}
+                    placeholder="e.g. Dabolim Airport / Calangute"
+                    className="mt-1 text-xs bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[11px] font-medium text-slate-600">Drop Price (₹)</Label>
+                  <Input
+                    type="number"
+                    value={form.drop_price}
+                    onChange={(e) => setForm({ ...form, drop_price: e.target.value })}
+                    placeholder="e.g. 1000 (0 if included)"
+                    className="mt-1 text-xs bg-white font-tabular font-bold text-[#20373B]"
+                  />
+                </div>
+              </div>
 
               {!isOp && (
                 <>
@@ -679,7 +738,7 @@ export default function BookingsPage() {
                     />
                     {form.daily_customer_rate && (
                       <div className="text-[11px] text-slate-500 mt-1">
-                        Total Sales: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
+                        Car Rental: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
                       </div>
                     )}
                   </Field>
@@ -700,178 +759,12 @@ export default function BookingsPage() {
                   />
                   {form.daily_customer_rate && (
                     <div className="text-[11px] text-slate-500 mt-1">
-                      Total Sales: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
+                      Car Rental: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
                     </div>
                   )}
                 </Field>
               )}
 
-              <Field label="Airport transfer">
-                <Select
-                  value={form.transfer_type}
-                  onValueChange={(v) => {
-                    const defaultCost = v === "both" ? "2000" : (v === "none" ? "0" : "1000");
-                    setForm({
-                      ...form,
-                      transfer_type: v,
-                      transfer_cost: defaultCost,
-                      transfer_manoj_share: form.transfer_handled_by === "self" ? defaultCost : String(Math.max(0, Number(defaultCost) - Number(form.transfer_driver_share || 0))),
-                    });
-                  }}
-                >
-                  <SelectTrigger data-testid="booking-transfer-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No transfer</SelectItem>
-                    <SelectItem value="airport_pickup">Airport pickup</SelectItem>
-                    <SelectItem value="airport_drop">Airport drop</SelectItem>
-                    <SelectItem value="both">Both (Pickup & Drop)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              {form.transfer_type !== "none" && (
-                <div className="sm:col-span-2 p-3.5 bg-[#F4FAFC] border border-[#C3E7F1] rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-[#20373B] flex items-center gap-1.5">
-                      <Plane className="w-4 h-4 text-[#519CAB]" /> Airport Transfer Duty & Cut Setup
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-500 font-tabular">
-                      Rate: ₹{form.transfer_cost || (form.transfer_type === "both" ? "2000" : "1000")}
-                    </span>
-                  </div>
-
-                  {/* Who Handles Transfer */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-[#20373B]">Who handles the airport duty?</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cost = form.transfer_cost || (form.transfer_type === "both" ? "2000" : "1000");
-                          setForm({
-                            ...form,
-                            transfer_handled_by: "self",
-                            driver_name: "Owner (Self)",
-                            transfer_driver_share: "0",
-                            transfer_manoj_share: cost,
-                            transfer_driver_paid: true,
-                          });
-                        }}
-                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                          form.transfer_handled_by !== "driver"
-                            ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-xs ring-1 ring-emerald-400"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="text-xs font-bold flex items-center gap-1">
-                          <User className="w-3.5 h-3.5 text-emerald-600" /> Owner (Self)
-                        </div>
-                        <div className="text-[10px] text-emerald-700 mt-0.5 font-medium">100% kept by owner · No driver cut</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tCost = Number(form.transfer_cost || (form.transfer_type === "both" ? 2000 : 1000));
-                          const cut = 400;
-                          setForm({
-                            ...form,
-                            transfer_handled_by: "driver",
-                            driver_name: form.driver_name === "Owner (Self)" ? "" : form.driver_name,
-                            transfer_driver_share: String(cut),
-                            transfer_manoj_share: String(Math.max(0, tCost - cut)),
-                            transfer_driver_paid: false,
-                          });
-                        }}
-                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                          form.transfer_handled_by === "driver"
-                            ? "bg-blue-50 border-blue-500 text-blue-950 font-bold shadow-xs ring-1 ring-blue-400"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="text-xs font-bold flex items-center gap-1">
-                          <Car className="w-3.5 h-3.5 text-blue-600" /> Send Driver on Cut
-                        </div>
-                        <div className="text-[10px] text-blue-700 mt-0.5 font-medium">Custom cut to driver · Rest to owner</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {form.transfer_handled_by === "driver" && (
-                    <div className="p-2.5 bg-white border border-blue-200 rounded-lg space-y-2.5 text-xs">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-[11px] font-semibold text-slate-700">Driver / Person Name</Label>
-                          <Input
-                            value={form.driver_name === "Owner (Self)" ? "" : form.driver_name}
-                            onChange={(e) => setForm({ ...form, driver_name: e.target.value })}
-                            placeholder="e.g. Suresh / Deepak"
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[11px] font-semibold text-slate-700">Driver WhatsApp / Phone</Label>
-                          <Input
-                            value={form.driver_contact || ""}
-                            onChange={(e) => setForm({ ...form, driver_contact: e.target.value })}
-                            placeholder="+91 98221..."
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-[11px] font-semibold text-slate-700">Agreed Driver Cut (₹)</Label>
-                          <Input
-                            type="number"
-                            value={form.transfer_driver_share}
-                            onChange={(e) => {
-                              const cut = Number(e.target.value || 0);
-                              const tCost = Number(form.transfer_cost || 1000);
-                              setForm({
-                                ...form,
-                                transfer_driver_share: e.target.value,
-                                transfer_manoj_share: String(Math.max(0, tCost - cut)),
-                              });
-                            }}
-                            placeholder="e.g. 400"
-                            className="h-8 text-xs font-bold font-tabular text-amber-900"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[11px] font-semibold text-slate-700">Manoj / Owner Retains (₹)</Label>
-                          <div className="h-8 flex items-center px-2 font-bold font-tabular text-emerald-900 bg-emerald-50 rounded border border-emerald-100">
-                            {formatInr(form.transfer_manoj_share || 0)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Flight & Pickup Point */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] font-semibold text-slate-700">Flight details / Time</Label>
-                      <Input
-                        value={form.flight_time}
-                        onChange={(e) => setForm({ ...form, flight_time: e.target.value })}
-                        placeholder="e.g. 18:30 6E-204"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] font-semibold text-slate-700">Terminal / Pickup point</Label>
-                      <Input
-                        value={form.transfer_pickup_point}
-                        onChange={(e) => setForm({ ...form, transfer_pickup_point: e.target.value })}
-                        placeholder="e.g. MOPA Airport T1"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
               <div className="sm:col-span-2">
                 <Field label="Notes">
                   <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Customer preferences, advance payment details..." />
@@ -883,42 +776,38 @@ export default function BookingsPage() {
                 <div className="sm:col-span-2 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] p-3.5 space-y-1.5 text-xs">
                   <div className="flex items-center justify-between mb-1">
                     <div className="font-bold text-[#20373B] text-xs uppercase tracking-wider">
-                      📊 Booking Financial Calculation ({days} Day{days > 1 ? "s" : ""})
+                      📊 Customer Bill & Financial Breakdown ({days} Day{days > 1 ? "s" : ""})
                     </div>
-                    {hasTransfer && (
+                    {totalTransferPrice > 0 && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold">
-                        ✈️ Airport Transfer Active
+                        📍 Transfers: +₹{totalTransferPrice.toLocaleString("en-IN")}
                       </span>
                     )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Customer</div>
-                      <div className="font-bold font-tabular text-[#20373B] text-sm mt-0.5">{formatInr(computedTotalCustomer)}</div>
-                      {hasTransfer && (
-                        <div className="text-[9px] text-slate-400 font-tabular">Car {formatInr(computedCarCustomer)} + Apt {formatInr(computedTransferCost)}</div>
-                      )}
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Customer Bill</div>
+                      <div className="font-extrabold font-tabular text-[#20373B] text-base mt-0.5">{formatInr(computedTotalCustomer)}</div>
+                      <div className="text-[9px] text-slate-500 font-tabular mt-0.5">
+                        Car {formatInr(computedCarCustomer)}
+                        {pickupPrice > 0 ? ` + Pick ₹${pickupPrice}` : ""}
+                        {dropPrice > 0 ? ` + Drop ₹${dropPrice}` : ""}
+                      </div>
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Cost</div>
-                      <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost + computedDriverCut)}</div>
-                      {computedDriverCut > 0 ? (
-                        <div className="text-[9px] text-amber-700 font-tabular">Owner {formatInr(computedTotalCost)} + Driver {formatInr(computedDriverCut)}</div>
-                      ) : (
-                        <div className="text-[9px] text-slate-400 font-tabular">Owner Rent: {formatInr(computedTotalCost)}</div>
-                      )}
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Car Owner Rent</div>
+                      <div className="font-bold font-tabular text-red-700 text-sm mt-0.5">{formatInr(computedTotalCost)}</div>
+                      <div className="text-[9px] text-slate-400 font-tabular">{days} days × ₹{form.daily_cost_rate || 0}</div>
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-[#C3E7F1]">
                       <div className="text-[10px] text-slate-400 font-semibold uppercase">Gross Margin</div>
                       <div className="font-bold font-tabular text-emerald-700 text-sm mt-0.5">{formatInr(computedMargin)}</div>
-                      {hasTransfer && (
-                        <div className="text-[9px] text-emerald-600 font-tabular">Car ₹{Math.round(computedCarProfit)} + Cab ₹{Math.round(computedTransferProfit)}</div>
-                      )}
+                      <div className="text-[9px] text-emerald-600 font-tabular">Car ₹{Math.round(computedCarProfit)} + Transfers ₹{totalTransferPrice}</div>
                     </div>
                     <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
                       <div className="text-[10px] text-emerald-800 font-semibold uppercase">Net Take-Home</div>
                       <div className="font-extrabold font-tabular text-emerald-800 text-sm mt-0.5">{formatInr(computedNet)}</div>
-                      <div className="text-[9px] text-emerald-700 font-semibold">Car + Cab Profit</div>
+                      <div className="text-[9px] text-emerald-700 font-semibold">Your total profit</div>
                     </div>
                   </div>
                 </div>
