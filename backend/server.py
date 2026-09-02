@@ -23,6 +23,7 @@ from routers.bookings_router import router as bookings_router, transfers_router
 from routers.ledger_router import router as ledger_router, finance_router, settings_router
 from routers.reports_router import router as activity_router, reports_router
 from routers.owner_expenses_router import router as owner_expenses_router
+from routers.expenses_router import router as expenses_router
 from routers.enquiries_router import router as enquiries_router
 from fastapi import HTTPException, Depends
 
@@ -36,6 +37,7 @@ api = APIRouter(prefix="/api")
 api.include_router(auth_router)
 api.include_router(entities_router)
 api.include_router(owner_expenses_router)
+api.include_router(expenses_router)
 api.include_router(bookings_router)
 api.include_router(transfers_router)
 api.include_router(ledger_router)

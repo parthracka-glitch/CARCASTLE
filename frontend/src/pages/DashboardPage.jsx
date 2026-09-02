@@ -19,11 +19,28 @@ import {
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Loader2, CircleDollarSign, TrendingUp, Clock, ShieldCheck,
-  Calendar, Bell, BellRing, Plane, Banknote, CreditCard, RefreshCw, UserCheck
+  Calendar, Bell, BellRing, Plane, Banknote, CreditCard, RefreshCw, UserCheck,
+  Plus, Trash2, Fuel, Wrench, Sparkles, Tag, AlertTriangle, Receipt, Car
 } from "lucide-react";
+
+const expenseCatMeta = {
+  fuel: { label: "Fuel", icon: "⛽", badge: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  fastag: { label: "FASTag / Toll", icon: "🏷️", badge: "bg-blue-50 text-blue-800 border-blue-200" },
+  driver_payment: { label: "Driver Extra", icon: "🚕", badge: "bg-amber-50 text-amber-800 border-amber-200" },
+  service: { label: "Service / Repair", icon: "🔧", badge: "bg-purple-50 text-purple-800 border-purple-200" },
+  wash: { label: "Car Wash", icon: "🧼", badge: "bg-cyan-50 text-cyan-800 border-cyan-200" },
+  challan: { label: "Traffic Challan", icon: "⚠️", badge: "bg-red-50 text-red-800 border-red-200" },
+  other: { label: "Other Expense", icon: "📝", badge: "bg-slate-100 text-slate-800 border-slate-200" },
+};
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -34,6 +51,32 @@ export default function DashboardPage() {
   const [schedule, setSchedule] = useState({ today: [], tomorrow: [], upcoming: [] });
   const [loading, setLoading] = useState(true);
   const [remindingId, setRemindingId] = useState(null);
+
+  // Owner Expenses State
+  const [expensesList, setExpensesList] = useState([]);
+  const [expensesSummary, setExpensesSummary] = useState({
+    total_expenses: 0,
+    fuel_total: 0,
+    fastag_total: 0,
+    driver_payment_total: 0,
+    service_total: 0,
+    wash_total: 0,
+    challan_total: 0,
+    other_total: 0,
+  });
+  const [carsList, setCarsList] = useState([]);
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [expenseFilterCat, setExpenseFilterCat] = useState("all");
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    category: "fuel",
+    amount: "",
+    date: new Date().toISOString().slice(0, 10),
+    car_id: "none",
+    payment_method: "cash",
+    description: "",
+    driver_name: "",
+  });
 
   const isOperator = user?.role === "operator";
 
@@ -63,8 +106,24 @@ export default function DashboardPage() {
     }
   };
 
+  const loadExpenses = async () => {
+    try {
+      const [{ data: expData }, { data: sumData }, { data: cData }] = await Promise.all([
+        api.get("/expenses", { params: { limit: 100 } }).catch(() => ({ data: [] })),
+        api.get("/expenses/summary").catch(() => ({ data: {} })),
+        api.get("/cars").catch(() => ({ data: [] })),
+      ]);
+      if (Array.isArray(expData)) setExpensesList(expData);
+      if (sumData) setExpensesSummary((prev) => ({ ...prev, ...sumData }));
+      if (Array.isArray(cData)) setCarsList(cData);
+    } catch (e) {
+      console.error("Expenses load error:", e);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadExpenses();
   }, [isOperator]); // eslint-disable-line
 
   useEffect(() => {
@@ -80,6 +139,52 @@ export default function DashboardPage() {
       }
     })();
   }, [gran, isOperator]);
+
+  const handleSaveExpense = async () => {
+    if (!expenseForm.amount || Number(expenseForm.amount) <= 0) {
+      toast.error("Please enter a valid expense amount");
+      return;
+    }
+    setSavingExpense(true);
+    try {
+      await api.post("/expenses", {
+        category: expenseForm.category,
+        amount: Number(expenseForm.amount),
+        date: expenseForm.date || new Date().toISOString().slice(0, 10),
+        car_id: expenseForm.car_id !== "none" ? expenseForm.car_id : null,
+        payment_method: expenseForm.payment_method,
+        description: expenseForm.description,
+        driver_name: expenseForm.driver_name,
+      });
+      toast.success("Expense recorded successfully");
+      setExpenseModalOpen(false);
+      setExpenseForm({
+        category: "fuel",
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+        car_id: "none",
+        payment_method: "cash",
+        description: "",
+        driver_name: "",
+      });
+      await loadExpenses();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed to record expense");
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (id) => {
+    if (!window.confirm("Delete this expense record?")) return;
+    try {
+      await api.delete(`/expenses/${id}`);
+      toast.success("Expense deleted");
+      await loadExpenses();
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed to delete expense");
+    }
+  };
 
   const sendDriverReminder = async (bookingId, driverName) => {
     setRemindingId(bookingId);
@@ -343,75 +448,250 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 📅 Tomorrow's Driver Schedule & Alert Dispatcher */}
-      <div className="mt-6 bg-white border border-[#C3E7F1] rounded-xl p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-[#C3E7F1]">
+      {/* 🧾 Owner Out-of-Pocket Expenses Section */}
+      <div className="mt-6 bg-white border border-[#C3E7F1] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#C3E7F1]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#20373B] text-[#FFC64F] flex items-center justify-center font-bold shadow-xs">
-              <Plane className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-[#20373B] text-[#FFC64F] flex items-center justify-center font-bold text-lg shadow-xs">
+              🧾
             </div>
             <div>
-              <h3 className="font-display font-bold text-[#20373B] text-base">Tomorrow's Pickups, Drops & Driver Alerts</h3>
-              <p className="text-xs text-[#519CAB] font-medium">Schedule for {schedule.tomorrow_date ? formatDate(schedule.tomorrow_date) : "Tomorrow"}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-display font-bold text-[#20373B] text-base sm:text-lg">
+                  Owner Personal & Business Expenses
+                </h3>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#F4FAFC] border border-[#C3E7F1] text-[#20373B] font-tabular">
+                  {formatInr(expensesSummary.total_expenses)} Total
+                </span>
+              </div>
+              <p className="text-xs text-[#519CAB] font-medium mt-0.5">
+                Record petrol/fuel, FASTags, extra driver duty cash, servicing, washes & repairs
+              </p>
             </div>
           </div>
-          <span className="text-xs px-2.5 py-1 rounded-full bg-[#F4FAFC] border border-[#C3E7F1] font-semibold text-[#20373B] self-start sm:self-auto">
-            {tomorrowTransfers.length} Scheduled
-          </span>
+
+          <Button
+            onClick={() => setExpenseModalOpen(true)}
+            className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-xs h-8 sm:h-9 px-3.5 shadow-xs self-start sm:self-auto"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Expense
+          </Button>
         </div>
 
-        {tomorrowTransfers.length === 0 ? (
-          <div className="p-6 text-center text-slate-400 text-xs bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1]">
-            🌴 No airport transfers or pickups scheduled for tomorrow. All vehicles and drivers assigned smoothly!
+        {/* 6 Category Summary Quick Filter Pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
+          <div
+            onClick={() => setExpenseFilterCat("all")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "all"
+                ? "bg-[#20373B] text-white border-[#20373B] shadow-xs"
+                : "bg-[#F4FAFC] border-[#C3E7F1] hover:border-[#519CAB] text-slate-700"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">All Expenses</div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "all" ? "text-[#FFC64F]" : "text-[#20373B]"}`}>
+              {formatInr(expensesSummary.total_expenses)}
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {tomorrowTransfers.map((b) => (
-              <div key={b.id} className="p-3.5 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-[#20373B] text-sm">{b.customer_name}</div>
-                    <a href={`tel:${b.customer_contact}`} className="text-xs text-[#519CAB] font-semibold">
-                      📞 {b.customer_contact}
-                    </a>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-md bg-white border border-[#C3E7F1] text-[11px] font-mono font-bold text-[#20373B]">
-                    {b.car_registration}
-                  </span>
-                </div>
 
-                <div className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-[#C3E7F1]/60 flex items-center justify-between">
-                  <span>
-                    <strong>Driver:</strong> {b.driver_name || "Owner (Self)"}
-                  </span>
-                  <span className="text-[11px] text-[#519CAB] font-semibold font-tabular">
-                    Time: {b.flight_time || formatTime12h(b.pickup_time)}
-                  </span>
-                </div>
+          <div
+            onClick={() => setExpenseFilterCat("fuel")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "fuel"
+                ? "bg-emerald-800 text-white border-emerald-800 shadow-xs"
+                : "bg-emerald-50/60 border-emerald-200 hover:border-emerald-400 text-emerald-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>⛽</span> Fuel
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "fuel" ? "text-emerald-200" : "text-emerald-800"}`}>
+              {formatInr(expensesSummary.fuel_total)}
+            </div>
+          </div>
 
-                <div className="text-[11px] text-slate-500 truncate">
-                  📍 {b.transfer_pickup_point || b.pickup_location || "Airport / Hotel"}
-                </div>
+          <div
+            onClick={() => setExpenseFilterCat("fastag")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "fastag"
+                ? "bg-blue-800 text-white border-blue-800 shadow-xs"
+                : "bg-blue-50/60 border-blue-200 hover:border-blue-400 text-blue-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>🏷️</span> FASTag
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "fastag" ? "text-blue-200" : "text-blue-800"}`}>
+              {formatInr(expensesSummary.fastag_total)}
+            </div>
+          </div>
 
-                <div className="pt-1 flex items-center justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => sendDriverReminder(b.id, b.driver_name || "Driver")}
-                    disabled={remindingId === b.id}
-                    className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-xs h-7 shadow-xs"
-                  >
-                    {remindingId === b.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin mr-1 text-[#FFC64F]" />
-                    ) : (
-                      <Bell className="w-3 h-3 mr-1 text-[#FFC64F]" />
-                    )}
-                    Send Alert
-                  </Button>
+          <div
+            onClick={() => setExpenseFilterCat("driver_payment")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "driver_payment"
+                ? "bg-amber-800 text-white border-amber-800 shadow-xs"
+                : "bg-amber-50/60 border-amber-200 hover:border-amber-400 text-amber-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>🚕</span> Driver Cash
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "driver_payment" ? "text-amber-200" : "text-amber-800"}`}>
+              {formatInr(expensesSummary.driver_payment_total)}
+            </div>
+          </div>
+
+          <div
+            onClick={() => setExpenseFilterCat("service")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "service"
+                ? "bg-purple-800 text-white border-purple-800 shadow-xs"
+                : "bg-purple-50/60 border-purple-200 hover:border-purple-400 text-purple-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>🔧</span> Service
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "service" ? "text-purple-200" : "text-purple-800"}`}>
+              {formatInr(expensesSummary.service_total)}
+            </div>
+          </div>
+
+          <div
+            onClick={() => setExpenseFilterCat("wash")}
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              expenseFilterCat === "wash"
+                ? "bg-cyan-800 text-white border-cyan-800 shadow-xs"
+                : "bg-cyan-50/60 border-cyan-200 hover:border-cyan-400 text-cyan-900"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80 flex items-center gap-1">
+              <span>🧼</span> Washes
+            </div>
+            <div className={`font-bold font-tabular text-sm mt-0.5 ${expenseFilterCat === "wash" ? "text-cyan-200" : "text-cyan-800"}`}>
+              {formatInr(expensesSummary.wash_total)}
+            </div>
+          </div>
+        </div>
+
+        {/* Expenses List */}
+        {(() => {
+          const filtered = expensesList.filter((e) =>
+            expenseFilterCat === "all" ? true : e.category === expenseFilterCat
+          );
+
+          if (filtered.length === 0) {
+            return (
+              <div className="p-8 text-center text-slate-400 text-xs bg-[#F4FAFC] rounded-xl border border-dashed border-[#C3E7F1] space-y-2">
+                <div className="text-2xl">🧾</div>
+                <div className="font-semibold text-slate-600">
+                  {expenseFilterCat === "all"
+                    ? "No expenses logged yet."
+                    : `No expenses logged under ${expenseCatMeta[expenseFilterCat]?.label || expenseFilterCat}.`}
                 </div>
+                <p className="text-[11px] text-slate-400">
+                  Click "+ Record Expense" to log personal fuel, FASTags, extra driver cash, or car repairs.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setExpenseForm((prev) => ({
+                      ...prev,
+                      category: expenseFilterCat !== "all" ? expenseFilterCat : "fuel",
+                    }));
+                    setExpenseModalOpen(true);
+                  }}
+                  className="text-xs text-[#519CAB] border-[#C3E7F1] hover:bg-white"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Log Expense
+                </Button>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filtered.slice(0, 12).map((exp) => {
+                const meta = expenseCatMeta[exp.category] || expenseCatMeta.other;
+                const isCash = exp.payment_method === "cash";
+
+                return (
+                  <div
+                    key={exp.id}
+                    className="p-3.5 rounded-xl bg-[#F4FAFC] border border-[#C3E7F1] hover:border-[#519CAB] transition-all flex flex-col justify-between space-y-2 shadow-2xs"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-md font-bold uppercase border flex items-center gap-1 ${meta.badge}`}
+                        >
+                          <span>{meta.icon}</span>
+                          <span>{meta.label}</span>
+                        </span>
+
+                        <div className="text-right">
+                          <span className="font-display font-extrabold text-sm text-[#20373B] font-tabular">
+                            {formatInr(exp.amount)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Vehicle / Driver attribution */}
+                      {(exp.car_registration || exp.car_model || exp.driver_name) && (
+                        <div className="text-[11px] text-slate-600 flex items-center gap-1.5 flex-wrap">
+                          {exp.car_registration && (
+                            <span className="font-mono font-bold text-[#20373B] bg-white border border-[#C3E7F1] px-1.5 py-0.2 rounded text-[10px]">
+                              {exp.car_registration}
+                            </span>
+                          )}
+                          {exp.car_model && (
+                            <span className="text-slate-500 font-medium truncate max-w-[120px]">
+                              {exp.car_model}
+                            </span>
+                          )}
+                          {exp.driver_name && (
+                            <span className="text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded text-[10px] font-semibold border border-amber-200">
+                              Driver: {exp.driver_name}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Note description */}
+                      {exp.description && (
+                        <p className="text-xs text-slate-700 bg-white p-2 rounded-lg border border-[#C3E7F1]/60 line-clamp-2">
+                          {exp.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <span>{formatDate(exp.date)}</span>
+                        <span>·</span>
+                        <span className="font-medium text-slate-600">
+                          {isCash ? "💵 Cash" : "💳 Online UPI"}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExpense(exp.id)}
+                        className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors"
+                        title="Delete expense"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Margin Trend & Monthly P&L */}
@@ -476,6 +756,141 @@ export default function DashboardPage() {
         </div>
         <RecentTable rows={recent} onRefundDeposit={refundDeposit} />
       </div>
+
+      {/* 📝 Record Expense Dialog Modal */}
+      <Dialog open={expenseModalOpen} onOpenChange={setExpenseModalOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="font-display text-[#20373B] text-lg flex items-center gap-2">
+              <span>🧾</span> Record Owner Out-of-Pocket Expense
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            <div>
+              <Label className="text-xs font-bold text-[#20373B]">Expense Category</Label>
+              <Select
+                value={expenseForm.category}
+                onValueChange={(v) => setExpenseForm((p) => ({ ...p, category: v }))}
+              >
+                <SelectTrigger className="mt-1 border-[#C3E7F1] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fuel">⛽ Fuel (Petrol / Diesel)</SelectItem>
+                  <SelectItem value="fastag">🏷️ FASTag / Toll Recharge</SelectItem>
+                  <SelectItem value="driver_payment">🚕 Driver Extra / Spot Payment</SelectItem>
+                  <SelectItem value="service">🔧 Service / Repair / Maintenance</SelectItem>
+                  <SelectItem value="wash">🧼 Car Wash & Cleaning</SelectItem>
+                  <SelectItem value="challan">⚠️ Traffic Challan / Fine</SelectItem>
+                  <SelectItem value="other">📝 Other Business Expense</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Amount (₹) *</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 1500"
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm((p) => ({ ...p, amount: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-tabular font-bold"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Date</Label>
+                <Input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm((p) => ({ ...p, date: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs font-tabular"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold text-[#20373B]">Linked Vehicle (Optional)</Label>
+              <Select
+                value={expenseForm.car_id}
+                onValueChange={(v) => setExpenseForm((p) => ({ ...p, car_id: v }))}
+              >
+                <SelectTrigger className="mt-1 border-[#C3E7F1] text-xs">
+                  <SelectValue placeholder="General / Unspecified Vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">General / Unspecified Vehicle</SelectItem>
+                  {carsList.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      🚗 {c.model} ({c.registration_no})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {expenseForm.category === "driver_payment" && (
+              <div>
+                <Label className="text-xs font-bold text-[#20373B]">Driver Name</Label>
+                <Input
+                  placeholder="e.g. Manoj, Ramesh"
+                  value={expenseForm.driver_name}
+                  onChange={(e) => setExpenseForm((p) => ({ ...p, driver_name: e.target.value }))}
+                  className="mt-1 border-[#C3E7F1] text-xs"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label className="text-xs font-bold text-[#20373B]">Payment Method</Label>
+              <Select
+                value={expenseForm.payment_method}
+                onValueChange={(v) => setExpenseForm((p) => ({ ...p, payment_method: v }))}
+              >
+                <SelectTrigger className="mt-1 border-[#C3E7F1] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">💵 Cash Out-of-Pocket</SelectItem>
+                  <SelectItem value="online">💳 Online (UPI / GPay / Bank)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold text-[#20373B]">Description / Note</Label>
+              <Textarea
+                placeholder="e.g. Full tank petrol before airport trip, FASTag recharge on highway..."
+                value={expenseForm.description}
+                onChange={(e) => setExpenseForm((p) => ({ ...p, description: e.target.value }))}
+                className="mt-1 border-[#C3E7F1] text-xs min-h-[65px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExpenseModalOpen(false)}
+              className="text-xs border-[#C3E7F1]"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveExpense}
+              disabled={savingExpense}
+              className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold text-xs"
+            >
+              {savingExpense ? <Loader2 className="w-3 h-3 animate-spin mr-1 text-[#FFC64F]" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+              Save Expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
