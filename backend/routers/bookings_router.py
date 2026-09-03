@@ -28,28 +28,38 @@ async def _add_ledger_entries_for_booking(db, booking: dict, user: dict):
     daily_cost = booking.get("daily_cost_rate", booking["cost_rate"] / max(1, days))
     days_note = f" ({days} days @ ₹{int(daily_cost):,}/day)" if days > 1 else ""
 
-    # Owner payable
-    owner_ledger = {
-        "id": new_id(),
-        "entity_type": "owner",
-        "entity_id": booking["owner_id"],
-        "booking_id": booking["id"],
-        "amount": float(booking["cost_rate"]),
-        "amount_paid": 0.0,
-        "status": "pending",
-        "description": f"Booking {booking['id'][:8]} — {booking['customer_name']}{days_note}",
-        "due_date": booking["end_date"],
-        "reminders_sent": 0,
-        "last_reminder_at": None,
-        "payments": [],
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    }
-    await db.ledger.insert_one(owner_ledger)
-    await db.car_owners.update_one(
-        {"id": booking["owner_id"]},
-        {"$inc": {"total_owed": float(booking["cost_rate"])}},
-    )
+    # Check if vehicle is on monthly contract
+    is_monthly = False
+    if booking.get("car_id"):
+        car_doc = await db.cars.find_one({"id": booking["car_id"]})
+        if car_doc and car_doc.get("billing_type") == "monthly":
+            is_monthly = True
+
+    cost_val = float(booking.get("cost_rate") or 0.0)
+
+    # Owner payable (only for daily/on-demand vehicles with cost > 0; monthly vehicles receive fixed retainer)
+    if not is_monthly and cost_val > 0 and booking.get("owner_id"):
+        owner_ledger = {
+            "id": new_id(),
+            "entity_type": "owner",
+            "entity_id": booking["owner_id"],
+            "booking_id": booking["id"],
+            "amount": cost_val,
+            "amount_paid": 0.0,
+            "status": "pending",
+            "description": f"Booking {booking['id'][:8]} — {booking['customer_name']}{days_note}",
+            "due_date": booking["end_date"],
+            "reminders_sent": 0,
+            "last_reminder_at": None,
+            "payments": [],
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        await db.ledger.insert_one(owner_ledger)
+        await db.car_owners.update_one(
+            {"id": booking["owner_id"]},
+            {"$inc": {"total_owed": cost_val}},
+        )
 
     # Agent payable (if present)
     if booking.get("assigned_agent_id") and float(booking.get("agent_fee", 0)) > 0:

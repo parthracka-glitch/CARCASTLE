@@ -32,6 +32,11 @@ class CarOwnerCreate(BaseModel):
     name: str
     contact: str
     notes: Optional[str] = ""
+    is_monthly_contract: Optional[bool] = False
+    monthly_amount: Optional[float] = 0.0
+    car_model: Optional[str] = ""
+    car_registration: Optional[str] = ""
+    owner_selling_rate: Optional[float] = 0.0
 
 
 class CarOwner(BaseModel):
@@ -72,6 +77,7 @@ class CarCreate(BaseModel):
     default_cost_rate: Optional[float] = 0.0
     billing_type: Optional[CarBillingType] = "daily"
     monthly_cost_rate: Optional[float] = 0.0
+    owner_selling_rate: Optional[float] = 0.0
     billing_cycle_day: Optional[int] = 1
 
 
@@ -83,6 +89,7 @@ class Car(BaseModel):
     default_cost_rate: float = 0.0
     billing_type: CarBillingType = "daily"
     monthly_cost_rate: float = 0.0
+    owner_selling_rate: float = 0.0
     billing_cycle_day: int = 1
     created_at: str = Field(default_factory=now_iso)
 

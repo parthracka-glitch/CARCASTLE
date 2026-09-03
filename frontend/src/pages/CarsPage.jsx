@@ -25,6 +25,7 @@ export default function CarsPage() {
     default_cost_rate: "",
     billing_type: "daily",
     monthly_cost_rate: "",
+    owner_selling_rate: "",
     billing_cycle_day: "1",
   });
   const [saving, setSaving] = useState(false);
@@ -44,6 +45,7 @@ export default function CarsPage() {
         default_cost_rate: Number(form.default_cost_rate || 0),
         billing_type: form.billing_type || "daily",
         monthly_cost_rate: Number(form.monthly_cost_rate || 0),
+        owner_selling_rate: Number(form.owner_selling_rate || 0),
         billing_cycle_day: Number(form.billing_cycle_day || 1),
       };
       if (editing) await api.put(`/cars/${editing.id}`, payload);
@@ -54,7 +56,7 @@ export default function CarsPage() {
       setForm({
         registration_no: "", model: "", owner_id: "",
         default_cost_rate: "", billing_type: "daily",
-        monthly_cost_rate: "", billing_cycle_day: "1"
+        monthly_cost_rate: "", owner_selling_rate: "", billing_cycle_day: "1"
       });
       await load();
     } catch (e) {
@@ -71,6 +73,7 @@ export default function CarsPage() {
       default_cost_rate: c.default_cost_rate || "",
       billing_type: c.billing_type || "daily",
       monthly_cost_rate: c.monthly_cost_rate || "",
+      owner_selling_rate: c.owner_selling_rate || "",
       billing_cycle_day: String(c.billing_cycle_day || "1"),
     });
     setOpen(true);
@@ -101,7 +104,7 @@ export default function CarsPage() {
               setForm({
                 registration_no: "", model: "", owner_id: "",
                 default_cost_rate: "", billing_type: "daily",
-                monthly_cost_rate: "", billing_cycle_day: "1"
+                monthly_cost_rate: "", owner_selling_rate: "", billing_cycle_day: "1"
               });
             }
           }}
@@ -114,39 +117,41 @@ export default function CarsPage() {
           <DialogContent className="w-[96vw] sm:max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-[#20373B] font-bold text-lg">
-                {editing ? "Edit car" : "Add new car"}
+                {editing ? "Edit car" : "Add vehicle to fleet"}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 text-xs">
+            <div className="space-y-3.5 text-slate-700">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Registration no.</Label>
-                <Input
-                  value={form.registration_no}
-                  onChange={(e) => setForm({ ...form, registration_no: e.target.value.toUpperCase() })}
-                  placeholder="e.g. GA-07-E-1234"
-                  data-testid="car-reg-input"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Model</Label>
+                <Label className="text-xs font-semibold">Car Model</Label>
                 <Input
                   value={form.model}
                   onChange={(e) => setForm({ ...form, model: e.target.value })}
-                  placeholder="e.g. Maruti Ertiga ZXi"
+                  placeholder="e.g. Ertiga, Thar, Swift"
                   data-testid="car-model-input"
                 />
               </div>
-
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Registration Number</Label>
+                <Input
+                  value={form.registration_no}
+                  onChange={(e) => setForm({ ...form, registration_no: e.target.value.toUpperCase() })}
+                  placeholder="e.g. GA-07-F-1234"
+                  data-testid="car-plate-input"
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Owner</Label>
                 <Select value={form.owner_id} onValueChange={(v) => setForm({ ...form, owner_id: v })}>
                   <SelectTrigger data-testid="car-owner-select"><SelectValue placeholder="Select owner" /></SelectTrigger>
-                  <SelectContent>{owners.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {owners.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name} ({o.contact})</SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
 
-              {/* Rental Basis with Owner */}
+              {/* Rental Contract Basis Toggle */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-[#20373B]">Rental Basis with Owner</Label>
                 <div className="grid grid-cols-2 gap-2">
@@ -176,32 +181,55 @@ export default function CarsPage() {
               </div>
 
               {form.billing_type === "monthly" ? (
-                <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
+                <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl space-y-3">
                   <div className="text-[11px] text-purple-900 font-medium leading-relaxed">
-                    💡 <strong>Monthly Lease / Retainer:</strong> Fixed payout owed to the owner each month (e.g. ₹30,000). You can post monthly retainers with 1 click in the owner ledger!
+                    💡 <strong>Monthly Lease / Retainer:</strong> Fixed payout owed to the owner each month (e.g. ₹30,000). Bookings will NOT charge per-day owner costs, and any revenue beyond this fixed amount becomes pure profit!
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Monthly Cost (₹/mo)</Label>
+                      <Label className="text-xs font-semibold text-purple-950">Fixed Monthly Cost (₹/mo)</Label>
                       <Input
                         type="number"
                         value={form.monthly_cost_rate}
                         onChange={(e) => setForm({ ...form, monthly_cost_rate: e.target.value })}
                         placeholder="e.g. 30000"
+                        className="bg-white border-purple-200 font-tabular font-semibold"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Billing Cycle Day</Label>
+                      <Label className="text-xs font-semibold text-purple-950">Owner Benchmark Selling Rate (₹/day)</Label>
                       <Input
                         type="number"
-                        min="1"
-                        max="31"
-                        value={form.billing_cycle_day}
-                        onChange={(e) => setForm({ ...form, billing_cycle_day: e.target.value })}
-                        placeholder="1"
+                        value={form.owner_selling_rate}
+                        onChange={(e) => setForm({ ...form, owner_selling_rate: e.target.value })}
+                        placeholder="e.g. 2500"
+                        className="bg-white border-purple-200 font-tabular font-semibold"
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-purple-950">Billing Cycle Day</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={form.billing_cycle_day}
+                      onChange={(e) => setForm({ ...form, billing_cycle_day: e.target.value })}
+                      placeholder="1"
+                      className="bg-white border-purple-200"
+                    />
+                  </div>
+
+                  {Number(form.monthly_cost_rate) > 0 && Number(form.owner_selling_rate) > 0 && (
+                    <div className="p-2.5 rounded-lg bg-white border border-purple-200 text-xs flex items-center justify-between">
+                      <span className="text-purple-900 font-medium">🎯 Target Break-Even:</span>
+                      <span className="font-bold text-purple-950">
+                        {(Number(form.monthly_cost_rate) / Number(form.owner_selling_rate)).toFixed(1)} Days
+                        <span className="text-[10px] text-purple-700 font-normal ml-1">(₹{Number(form.monthly_cost_rate).toLocaleString("en-IN")} ÷ ₹{Number(form.owner_selling_rate).toLocaleString("en-IN")}/day)</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -246,10 +274,17 @@ export default function CarsPage() {
               <div className="flex items-center justify-between pt-1 text-xs">
                 <div>
                   {c.billing_type === "monthly" ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
-                      <Calendar className="w-3 h-3 text-purple-600" />
-                      {formatInr(c.monthly_cost_rate)}/mo lease
-                    </span>
+                    <div className="space-y-0.5">
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
+                        <Calendar className="w-3 h-3 text-purple-600" />
+                        {formatInr(c.monthly_cost_rate)}/mo lease
+                      </span>
+                      {Number(c.owner_selling_rate) > 0 && (
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          Benchmark: <strong className="text-[#20373B]">{formatInr(c.owner_selling_rate)}/day</strong>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div>
                       <span className="text-slate-400">Rate: </span>
@@ -282,7 +317,7 @@ export default function CarsPage() {
                 <th className="text-left px-5 py-3 font-bold">Registration</th>
                 <th className="text-left px-5 py-3 font-bold">Owner</th>
                 <th className="text-left px-5 py-3 font-bold">Contract Basis</th>
-                <th className="text-right px-5 py-3 font-bold">Cost Rate</th>
+                <th className="text-right px-5 py-3 font-bold">Rates</th>
                 <th className="text-right px-5 py-3 font-bold">Actions</th>
               </tr>
             </thead>
@@ -305,7 +340,14 @@ export default function CarsPage() {
                   </td>
                   <td className="px-5 py-3 text-right font-tabular font-bold text-[#20373B]">
                     {c.billing_type === "monthly" ? (
-                      <span className="text-purple-900">{formatInr(c.monthly_cost_rate)}/mo</span>
+                      <div className="text-right">
+                        <div className="text-purple-900 font-bold">{formatInr(c.monthly_cost_rate)}/mo</div>
+                        {Number(c.owner_selling_rate) > 0 && (
+                          <div className="text-[10px] text-slate-500 font-normal">
+                            Benchmark: <span className="font-semibold text-[#20373B]">{formatInr(c.owner_selling_rate)}/day</span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <span>{formatInr(c.default_cost_rate)}/day</span>
                     )}

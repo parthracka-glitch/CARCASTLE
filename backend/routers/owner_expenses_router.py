@@ -1,6 +1,7 @@
 """Car Owner handover expenses (fuel, wash, maintenance), monthly contracts & settlement calculation router."""
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional, List
+from datetime import datetime, timezone
 from models import (
     OwnerExpenseCreate,
     OwnerExpenseUpdate,
@@ -292,6 +293,45 @@ async def get_owner_settlement_summary(
 
     # Cars list
     cars = await db.cars.find({"owner_id": owner_id}, {"_id": 0}).to_list(100)
+    monthly_cars = [c for c in cars if c.get("billing_type") == "monthly"]
+
+    m_filter = month[:7] if month and month != "all" else datetime.now(timezone.utc).strftime("%Y-%m")
+    monthly_target = sum(float(c.get("monthly_cost_rate") or 0.0) for c in monthly_cars)
+    monthly_car_ids = [c["id"] for c in monthly_cars]
+
+    extracted_revenue = 0.0
+    extracted_days = 0
+    bookings_count = 0
+
+    if monthly_car_ids:
+        monthly_bookings = await db.bookings.find({
+            "car_id": {"$in": monthly_car_ids},
+            "status": {"$ne": "cancelled"},
+            "start_date": {"$regex": f"^{m_filter}"}
+        }, {"_id": 0}).to_list(1000)
+
+        extracted_revenue = sum(float(b.get("customer_rate") or 0.0) for b in monthly_bookings)
+        extracted_days = sum(int(b.get("days") or 1) for b in monthly_bookings)
+        bookings_count = len(monthly_bookings)
+
+    is_surplus = extracted_revenue >= monthly_target if monthly_target > 0 else True
+    surplus_amount = max(0.0, extracted_revenue - monthly_target) if monthly_target > 0 else extracted_revenue
+    pending_amount = max(0.0, monthly_target - extracted_revenue) if monthly_target > 0 else 0.0
+    percent_extracted = round((extracted_revenue / monthly_target) * 100, 1) if monthly_target > 0 else 100.0
+
+    monthly_performance = {
+        "has_monthly_contract": len(monthly_cars) > 0,
+        "month": m_filter,
+        "monthly_target": monthly_target,
+        "extracted_revenue": extracted_revenue,
+        "extracted_days": extracted_days,
+        "bookings_count": bookings_count,
+        "is_surplus": is_surplus,
+        "surplus_amount": surplus_amount,
+        "pending_amount": pending_amount,
+        "percent_extracted": percent_extracted,
+        "monthly_cars": monthly_cars,
+    }
 
     return {
         "owner_id": owner_id,
@@ -307,6 +347,7 @@ async def get_owner_settlement_summary(
         "breakdown": breakdown,
         "net_balance_due": net_balance_due,
         "cars": cars,
+        "monthly_performance": monthly_performance,
         "unsettled_items": [e for e in expenses if not e.get("is_settled", False)],
         "recent_expenses": expenses[:15],
     }

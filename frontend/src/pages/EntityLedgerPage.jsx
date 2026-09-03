@@ -609,6 +609,137 @@ export default function EntityLedgerPage({ type }) {
         )}
       </div>
 
+      {/* 📊 Monthly Vehicle Contract Break-Even & Profit Tracker */}
+      {isOwner && summary?.monthly_performance?.has_monthly_contract && (
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-[#142A2F] to-[#0A1A1E] text-white shadow-lg border border-[#20373B] space-y-3.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <div>
+                <span className="font-extrabold text-xs sm:text-sm text-[#FFC64F] uppercase tracking-wider block">
+                  Monthly Vehicle Break-Even & Profit Tracker
+                </span>
+                <span className="text-[11px] text-slate-300">
+                  Fixed monthly lease vs customer booking revenue extracted
+                </span>
+              </div>
+            </div>
+            <span className="text-xs font-mono bg-white/10 px-3 py-1 rounded-md border border-white/10 text-slate-200">
+              📅 Billing Cycle: {summary.monthly_performance.month}
+            </span>
+          </div>
+
+          {/* The 3 Core Metric Cards Requested by User */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-center">
+            {/* 1. Total Price Set for the Month */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-left sm:text-center">
+              <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between sm:justify-center gap-1">
+                <span>🏷️ Set Price for the Month</span>
+              </div>
+              <div className="text-base sm:text-xl font-black text-white mt-1 font-tabular">
+                {formatInr(summary.monthly_performance.monthly_target)}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Fixed owner monthly retainer
+              </div>
+            </div>
+
+            {/* 2. Total Price Extracted Out of That Car */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-left sm:text-center">
+              <div className="text-[11px] text-[#519CAB] font-semibold flex items-center justify-between sm:justify-center gap-1">
+                <span>💰 Total Extracted Out of Car</span>
+              </div>
+              <div className="text-base sm:text-xl font-black text-[#519CAB] mt-1 font-tabular">
+                {formatInr(summary.monthly_performance.extracted_revenue)}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                From {summary.monthly_performance.extracted_days} rental days ({summary.monthly_performance.bookings_count} bookings)
+              </div>
+            </div>
+
+            {/* 3. Amount Pending OR Surplus Profit Remaining */}
+            <div className={`p-3 rounded-xl border text-left sm:text-center ${
+              summary.monthly_performance.is_surplus
+                ? "bg-emerald-500/15 border-emerald-500/40"
+                : "bg-amber-500/15 border-amber-500/40"
+            }`}>
+              <div className="text-[11px] font-semibold flex items-center justify-between sm:justify-center gap-1">
+                {summary.monthly_performance.is_surplus ? (
+                  <span className="text-emerald-300">🚀 Surplus Profit Remaining</span>
+                ) : (
+                  <span className="text-amber-300">⏳ Amount Pending to Break-Even</span>
+                )}
+              </div>
+              <div className={`text-base sm:text-xl font-black mt-1 font-tabular ${
+                summary.monthly_performance.is_surplus ? "text-emerald-300" : "text-amber-300"
+              }`}>
+                {summary.monthly_performance.is_surplus
+                  ? `+${formatInr(summary.monthly_performance.surplus_amount)}`
+                  : formatInr(summary.monthly_performance.pending_amount)}
+              </div>
+              <div className="text-[10px] text-slate-300 mt-0.5">
+                {summary.monthly_performance.is_surplus
+                  ? "100% Pure Profit for Car Castle!"
+                  : "Needed to cover owner monthly lease"}
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Visual Progress Bar */}
+          <div className="space-y-1 pt-1">
+            <div className="flex justify-between text-xs font-semibold">
+              <span className="text-slate-300">
+                Recovery Progress: <strong className="text-white font-tabular">{formatInr(summary.monthly_performance.extracted_revenue)} / {formatInr(summary.monthly_performance.monthly_target)}</strong>
+              </span>
+              <span className={summary.monthly_performance.is_surplus ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                {summary.monthly_performance.percent_extracted}% {summary.monthly_performance.is_surplus ? "Surplus Profit Zone" : "Recovered"}
+              </span>
+            </div>
+            <div className="w-full h-3 bg-white/15 rounded-full overflow-hidden p-0.5 relative">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  summary.monthly_performance.is_surplus
+                    ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300"
+                    : "bg-gradient-to-r from-amber-500 via-yellow-400 to-[#FFC64F]"
+                }`}
+                style={{ width: `${Math.min(100, Math.max(4, summary.monthly_performance.percent_extracted))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Dynamic Result Verdict Banner */}
+          {summary.monthly_performance.is_surplus ? (
+            <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">🎉</span>
+                <div>
+                  <div className="font-extrabold text-white text-xs sm:text-sm">
+                    Monthly Lease Crossed — PURE PROFIT ZONE!
+                  </div>
+                  <div className="text-[11px] text-emerald-300 mt-0.5 leading-snug">
+                    Owner's fixed lease of {formatInr(summary.monthly_performance.monthly_target)} is 100% covered. You have generated a surplus of <strong>{formatInr(summary.monthly_performance.surplus_amount)}</strong> pure profit for your agency!
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">⏳</span>
+                <div>
+                  <div className="font-bold text-white text-xs sm:text-sm">
+                    Recovering Owner's Monthly Lease
+                  </div>
+                  <div className="text-[11px] text-amber-300 mt-0.5 leading-snug">
+                    Extracted {formatInr(summary.monthly_performance.extracted_revenue)} so far. Still {formatInr(summary.monthly_performance.pending_amount)} pending to cross break-even and enter the profit zone.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tabs navigation for Car Owners */}
       {isOwner && (
         <div className="flex items-center gap-1.5 sm:gap-2 mb-4 border-b border-[#C3E7F1] pb-2 overflow-x-auto no-scrollbar">

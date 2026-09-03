@@ -75,6 +75,32 @@ export default function BookingsPage() {
   const [intakeForm, setIntakeForm] = useState({ fuel_amount: "", wash_amount: "", notes: "" });
   const [savingIntake, setSavingIntake] = useState(false);
 
+  // Monthly vehicle live break-even performance state
+  const [selectedCarPerf, setSelectedCarPerf] = useState(null);
+  const [loadingCarPerf, setLoadingCarPerf] = useState(false);
+
+  const fetchCarPerf = async (carId, startDate) => {
+    if (!carId) {
+      setSelectedCarPerf(null);
+      return;
+    }
+    const c = cars.find((x) => x.id === carId);
+    if (!c || c.billing_type !== "monthly") {
+      setSelectedCarPerf(null);
+      return;
+    }
+    const m = (startDate || form.start_date || new Date().toISOString()).slice(0, 7);
+    setLoadingCarPerf(true);
+    try {
+      const res = await api.get(`/cars/${carId}/monthly-performance?month=${m}`);
+      setSelectedCarPerf(res.data);
+    } catch (err) {
+      console.error("Failed to load car performance", err);
+    } finally {
+      setLoadingCarPerf(false);
+    }
+  };
+
   const load = async () => {
     const [r, c, a, o] = await Promise.all([
       api.get("/bookings"),
@@ -112,6 +138,9 @@ export default function BookingsPage() {
   const onStartDateChange = (val) => {
     const rec = recomputeRatesForDates(val, form.end_date, form.pickup_time, form.drop_time);
     setForm({ ...form, start_date: val, cost_rate: rec.cost_rate, customer_rate: rec.customer_rate });
+    if (form.car_id) {
+      fetchCarPerf(form.car_id, val);
+    }
   };
 
   const onEndDateChange = (val) => {
@@ -249,6 +278,11 @@ export default function BookingsPage() {
       notes: b.notes || "",
     });
     setOpen(true);
+    if (b.car_id) {
+      fetchCarPerf(b.car_id, b.start_date);
+    } else {
+      setSelectedCarPerf(null);
+    }
   };
 
   const saveAssignedPlate = async () => {
@@ -301,23 +335,28 @@ export default function BookingsPage() {
     if (!intakeBooking) return;
     setSavingIntake(true);
     try {
-      const payload = {
+      const fuelAmt = Number(intakeForm.fuel_amount || 0);
+      const washAmt = Number(intakeForm.wash_amount || 0);
+
+      await api.put(`/bookings/${intakeBooking.id}/handover-intake`, {
         status: "car_received",
-        fuel_amount: skipCharges ? 0 : Number(intakeForm.fuel_amount || 0),
-        wash_amount: skipCharges ? 0 : Number(intakeForm.wash_amount || 0),
-        notes: skipCharges ? "" : intakeForm.notes,
-      };
-      await api.post(`/bookings/${intakeBooking.id}/handover-intake`, payload);
-      if (!skipCharges && (payload.fuel_amount > 0 || payload.wash_amount > 0)) {
-        toast.success("Car received & handover charges recorded against owner");
+        fuel_amount: skipCharges ? 0 : fuelAmt,
+        wash_amount: skipCharges ? 0 : washAmt,
+        notes: intakeForm.notes || "",
+      });
+
+      if (!skipCharges && (fuelAmt > 0 || washAmt > 0)) {
+        toast.success(`Vehicle received! Recorded ₹${(fuelAmt + washAmt).toLocaleString("en-IN")} handover charges for owner deduction.`);
       } else {
-        toast.success("Status updated to Car received");
+        toast.success("Vehicle status updated to Car Received (Intake complete).");
       }
+
       setIntakeModalOpen(false);
       setIntakeBooking(null);
+      setIntakeForm({ fuel_amount: "", wash_amount: "", notes: "" });
       await load();
     } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail) || "Failed to update intake");
+      toast.error(formatApiError(e.response?.data?.detail));
     } finally {
       setSavingIntake(false);
     }
@@ -360,6 +399,18 @@ export default function BookingsPage() {
       toast.error(e.message || "Failed to export report");
     }
   };
+
+  const selectedCar = cars.find((c) => c.id === form.car_id);
+  const isMonthlyCar = form.car_selection_mode !== "direct" && selectedCar?.billing_type === "monthly";
+  const monthlyLeaseTarget = Number(selectedCarPerf?.monthly_cost_rate || selectedCar?.monthly_cost_rate || 0);
+  const priorCarRevenue = Number(selectedCarPerf?.total_revenue || 0) - (editing && editing.car_id === form.car_id ? Number(editing.customer_rate || 0) : 0);
+  const safePriorRevenue = Math.max(0, priorCarRevenue);
+  const currentBookingCarRevenue = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
+  const projectedTotalCarRevenue = safePriorRevenue + currentBookingCarRevenue;
+  const isThresholdCrossed = projectedTotalCarRevenue >= monthlyLeaseTarget && monthlyLeaseTarget > 0;
+  const pureProfitForCarCastle = Math.max(0, projectedTotalCarRevenue - monthlyLeaseTarget);
+  const amountNeededToBreakEven = Math.max(0, monthlyLeaseTarget - projectedTotalCarRevenue);
+  const percentRecovered = monthlyLeaseTarget > 0 ? Math.min(100, Math.round((projectedTotalCarRevenue / monthlyLeaseTarget) * 100)) : 100;
 
   const computedCarCustomer = form.daily_customer_rate ? Number(form.daily_customer_rate) * days : Number(form.customer_rate || 0);
   const computedTotalCost = form.daily_cost_rate ? Number(form.daily_cost_rate) * days : Number(form.cost_rate || 0);
@@ -408,7 +459,7 @@ export default function BookingsPage() {
               </Button>
             </>
           )}
-          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(empty); } }}>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(empty); setSelectedCarPerf(null); } }}>
             <DialogTrigger asChild>
               <Button className="bg-[#20373B] hover:bg-[#2C494E] text-[#FFC64F] font-bold shadow-xs h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs" data-testid="new-booking-button">
                 <Plus className="w-3.5 h-3.5 mr-1 shrink-0" />
@@ -462,14 +513,34 @@ export default function BookingsPage() {
                     <Label className="text-xs font-medium text-slate-600 mb-1 block">Select Registered Car</Label>
                     <Select value={form.car_id} onValueChange={(v) => {
                       const c = cars.find((x) => x.id === v);
-                      const rate = c?.default_cost_rate ? String(c.default_cost_rate) : form.daily_cost_rate;
-                      const totalCost = rate ? String(Number(rate) * days) : form.cost_rate;
-                      setForm({ ...form, car_id: v, daily_cost_rate: rate, cost_rate: totalCost, car_model: c?.model || "", car_registration: c?.registration_no || "" });
+                      const isMonthly = c?.billing_type === "monthly";
+                      const rate = isMonthly ? "0" : (c?.default_cost_rate ? String(c.default_cost_rate) : form.daily_cost_rate);
+                      const totalCost = isMonthly ? "0" : (rate ? String(Number(rate) * days) : form.cost_rate);
+                      
+                      let custRate = form.daily_customer_rate;
+                      if (isMonthly && Number(c?.owner_selling_rate) > 0 && (!form.daily_customer_rate || form.daily_customer_rate === "0")) {
+                        custRate = String(c.owner_selling_rate);
+                      }
+                      const totalCustomer = custRate ? String(Number(custRate) * days) : form.customer_rate;
+
+                      setForm({
+                        ...form,
+                        car_id: v,
+                        daily_cost_rate: rate,
+                        cost_rate: totalCost,
+                        daily_customer_rate: custRate,
+                        customer_rate: totalCustomer,
+                        car_model: c?.model || "",
+                        car_registration: c?.registration_no || ""
+                      });
+                      fetchCarPerf(v, form.start_date);
                     }}>
                       <SelectTrigger data-testid="booking-car-select"><SelectValue placeholder="Select car from fleet" /></SelectTrigger>
                       <SelectContent>
                         {cars.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.model} · {c.registration_no} ({c.owner_name})</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.model} · {c.registration_no} ({c.owner_name}) {c.billing_type === "monthly" ? "📅 [Monthly Lease]" : ""}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -716,23 +787,45 @@ export default function BookingsPage() {
 
               {!isOp && (
                 <>
-                  <Field label={`Car Owner Rate / Day (₹/day)`}>
-                    <Input
-                      type="number"
-                      value={form.daily_cost_rate}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setForm({ ...form, daily_cost_rate: v, cost_rate: v ? String(Number(v) * days) : "" });
-                      }}
-                      data-testid="booking-daily-cost-rate"
-                      placeholder="e.g. 1800"
-                    />
-                    {form.daily_cost_rate && (
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        Total Cost: {days} days × ₹{Number(form.daily_cost_rate).toLocaleString("en-IN")} = <strong className="text-red-700 font-bold">₹{(Number(form.daily_cost_rate) * days).toLocaleString("en-IN")}</strong>
+                  {isMonthlyCar ? (
+                    <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                          <span>📅</span> Monthly Lease Vehicle
+                        </span>
+                        <span className="text-[11px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
+                          {formatInr(monthlyLeaseTarget)}/mo lease
+                        </span>
                       </div>
-                    )}
-                  </Field>
+                      <div className="text-[11px] text-purple-900 leading-relaxed">
+                        Owner trip cost is locked at <strong className="text-emerald-700">₹0</strong> (owner is settled via monthly retainer).
+                      </div>
+                      {Number(selectedCar?.owner_selling_rate) > 0 && (
+                        <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-purple-200/60">
+                          <span>Owner Benchmark Selling Rate:</span>
+                          <strong className="text-[#20373B]">{formatInr(selectedCar.owner_selling_rate)}/day</strong>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <Field label={`Car Owner Rate / Day (₹/day)`}>
+                      <Input
+                        type="number"
+                        value={form.daily_cost_rate}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm({ ...form, daily_cost_rate: v, cost_rate: v ? String(Number(v) * days) : "" });
+                        }}
+                        data-testid="booking-daily-cost-rate"
+                        placeholder="e.g. 1800"
+                      />
+                      {form.daily_cost_rate && (
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          Total Cost: {days} days × ₹{Number(form.daily_cost_rate).toLocaleString("en-IN")} = <strong className="text-red-700 font-bold">₹{(Number(form.daily_cost_rate) * days).toLocaleString("en-IN")}</strong>
+                        </div>
+                      )}
+                    </Field>
+                  )}
                   <Field label={`Customer Selling Rate / Day (₹/day)`}>
                     <Input
                       type="number"
@@ -742,11 +835,28 @@ export default function BookingsPage() {
                         setForm({ ...form, daily_customer_rate: v, customer_rate: v ? String(Number(v) * days) : "" });
                       }}
                       data-testid="booking-daily-customer-rate"
-                      placeholder="e.g. 2600"
+                      placeholder={isMonthlyCar && selectedCar?.owner_selling_rate ? String(selectedCar.owner_selling_rate) : "e.g. 2600"}
                     />
                     {form.daily_customer_rate && (
                       <div className="text-[11px] text-slate-500 mt-1">
                         Car Rental: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
+                      </div>
+                    )}
+                    {isMonthlyCar && Number(selectedCar?.owner_selling_rate) > 0 && form.daily_customer_rate && (
+                      <div className="mt-1">
+                        {Number(form.daily_customer_rate) < Number(selectedCar.owner_selling_rate) ? (
+                          <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                            ⚠️ ₹{Number(selectedCar.owner_selling_rate) - Number(form.daily_customer_rate)}/day below owner's benchmark ({formatInr(selectedCar.owner_selling_rate)}/day)
+                          </span>
+                        ) : Number(form.daily_customer_rate) > Number(selectedCar.owner_selling_rate) ? (
+                          <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                            🚀 +₹{Number(form.daily_customer_rate) - Number(selectedCar.owner_selling_rate)}/day markup above benchmark!
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                            ✓ Matches owner benchmark rate
+                          </span>
+                        )}
                       </div>
                     )}
                   </Field>
@@ -763,14 +873,135 @@ export default function BookingsPage() {
                       setForm({ ...form, daily_customer_rate: v, customer_rate: v ? String(Number(v) * days) : "" });
                     }}
                     data-testid="booking-daily-customer-rate"
-                    placeholder="e.g. 2600"
+                    placeholder={isMonthlyCar && selectedCar?.owner_selling_rate ? String(selectedCar.owner_selling_rate) : "e.g. 2600"}
                   />
                   {form.daily_customer_rate && (
                     <div className="text-[11px] text-slate-500 mt-1">
                       Car Rental: {days} days × ₹{Number(form.daily_customer_rate).toLocaleString("en-IN")} = <strong className="text-[#20373B] font-bold">₹{(Number(form.daily_customer_rate) * days).toLocaleString("en-IN")}</strong>
                     </div>
                   )}
+                  {isMonthlyCar && Number(selectedCar?.owner_selling_rate) > 0 && form.daily_customer_rate && (
+                    <div className="mt-1">
+                      {Number(form.daily_customer_rate) < Number(selectedCar.owner_selling_rate) ? (
+                        <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                          ⚠️ ₹{Number(selectedCar.owner_selling_rate) - Number(form.daily_customer_rate)}/day below owner's benchmark ({formatInr(selectedCar.owner_selling_rate)}/day)
+                        </span>
+                      ) : Number(form.daily_customer_rate) > Number(selectedCar.owner_selling_rate) ? (
+                        <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                          🚀 +₹{Number(form.daily_customer_rate) - Number(selectedCar.owner_selling_rate)}/day markup above benchmark!
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-semibold">
+                          ✓ Matches owner benchmark rate
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </Field>
+              )}
+
+              {/* 📊 Live Monthly Vehicle Break-Even & Profit Meter */}
+              {isMonthlyCar && (
+                <div className="sm:col-span-2 p-4 bg-gradient-to-br from-slate-900 via-[#142A2F] to-[#0A1A1E] text-white rounded-2xl shadow-lg border border-[#20373B] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📊</span>
+                      <span className="font-bold text-xs text-[#FFC64F] uppercase tracking-wider">
+                        Monthly Vehicle Break-Even & Profit Meter
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 font-mono bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10">
+                      {selectedCarPerf?.month || (form.start_date || new Date().toISOString()).slice(0, 7)}
+                    </span>
+                  </div>
+
+                  {/* 3 Metric Cards */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <div className="text-[10px] text-slate-400 font-medium">Monthly Owner Lease</div>
+                      <div className="text-xs sm:text-sm font-extrabold text-white mt-0.5 font-tabular">
+                        {formatInr(monthlyLeaseTarget)}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <div className="text-[10px] text-slate-400 font-medium">Month Revenue So Far</div>
+                      <div className="text-xs sm:text-sm font-extrabold text-[#519CAB] mt-0.5 font-tabular">
+                        {formatInr(safePriorRevenue)}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#FFC64F]/15 border border-[#FFC64F]/30">
+                      <div className="text-[10px] text-[#FFC64F] font-semibold">This Booking Adds</div>
+                      <div className="text-xs sm:text-sm font-extrabold text-[#FFC64F] mt-0.5 font-tabular">
+                        +{formatInr(currentBookingCarRevenue)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Progress Bar */}
+                  <div className="space-y-1 pt-0.5">
+                    <div className="flex justify-between text-[11px] font-semibold">
+                      <span className="text-slate-300">
+                        Projected Total: <strong className="text-white font-tabular">{formatInr(projectedTotalCarRevenue)}</strong>
+                      </span>
+                      <span className={isThresholdCrossed ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                        {percentRecovered}% Recovered
+                      </span>
+                    </div>
+                    <div className="w-full h-3 bg-white/15 rounded-full overflow-hidden p-0.5 relative">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isThresholdCrossed
+                            ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 shadow-sm"
+                            : "bg-gradient-to-r from-amber-500 via-yellow-400 to-[#FFC64F]"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(4, percentRecovered))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dynamic Result Banner */}
+                  {isThresholdCrossed ? (
+                    <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🎉</span>
+                        <div>
+                          <div className="font-extrabold text-white text-xs sm:text-sm">
+                            Monthly Lease Crossed — PURE PROFIT ZONE!
+                          </div>
+                          <div className="text-[11px] text-emerald-300 mt-0.5 leading-snug">
+                            The owner's fixed lease of {formatInr(monthlyLeaseTarget)} is 100% recovered! Every rupee beyond this threshold is pure profit for your agency.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right pl-3 shrink-0 border-l border-emerald-500/30">
+                        <div className="text-[10px] uppercase text-emerald-200 font-bold tracking-wider">Your Net Profit</div>
+                        <div className="text-base sm:text-lg font-extrabold text-emerald-300 font-tabular">
+                          +{formatInr(pureProfitForCarCastle)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">⏳</span>
+                        <div>
+                          <div className="font-bold text-white text-xs sm:text-sm">
+                            Recovering Owner's Monthly Lease
+                          </div>
+                          <div className="text-[11px] text-amber-300 mt-0.5 leading-snug">
+                            This booking recovers {formatInr(currentBookingCarRevenue)}. {formatInr(amountNeededToBreakEven)} remaining to cross break-even and enter the profit zone.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right pl-3 shrink-0 border-l border-amber-500/30">
+                        <div className="text-[10px] uppercase text-amber-200 font-semibold tracking-wider">To Break Even</div>
+                        <div className="text-sm sm:text-base font-bold text-amber-300 font-tabular">
+                          {formatInr(amountNeededToBreakEven)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* 💵 Advance Payment & Client Balance Due */}

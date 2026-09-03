@@ -27,7 +27,17 @@ export default function EntitiesPage({ type }) {
 
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", contact: "", notes: "" });
+  const initialForm = {
+    name: "",
+    contact: "",
+    notes: "",
+    is_monthly_contract: false,
+    monthly_amount: "",
+    car_model: "",
+    car_registration: "",
+    owner_selling_rate: "",
+  };
+  const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -41,10 +51,15 @@ export default function EntitiesPage({ type }) {
   const save = async () => {
     setSaving(true);
     try {
-      await api.post(endpoint, form);
+      const payload = {
+        ...form,
+        monthly_amount: Number(form.monthly_amount || 0),
+        owner_selling_rate: Number(form.owner_selling_rate || 0),
+      };
+      await api.post(endpoint, payload);
       toast.success(`${label} added successfully`);
       setOpen(false);
-      setForm({ name: "", contact: "", notes: "" });
+      setForm(initialForm);
       await load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || e.message);
@@ -128,6 +143,115 @@ export default function EntitiesPage({ type }) {
                   rows={2}
                 />
               </div>
+
+              {isOwner && (
+                <div className="space-y-2.5 pt-2 border-t border-[#C3E7F1]/70">
+                  <Label className="text-xs font-bold text-[#20373B] flex items-center justify-between">
+                    <span>Agreement Model:</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Choose payout type</span>
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, is_monthly_contract: false })}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
+                        !form.is_monthly_contract
+                          ? "bg-[#20373B] text-[#FFC64F] border-[#20373B] shadow-xs"
+                          : "bg-white text-slate-600 border-[#C3E7F1] hover:bg-slate-50"
+                      }`}
+                    >
+                      🚗 Per-Day (Standard)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, is_monthly_contract: true })}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer ${
+                        form.is_monthly_contract
+                          ? "bg-purple-900 text-white border-purple-900 shadow-xs"
+                          : "bg-white text-purple-800 border-purple-200 hover:bg-purple-50"
+                      }`}
+                    >
+                      📅 Monthly Retainer
+                    </button>
+                  </div>
+
+                  {form.is_monthly_contract && (
+                    <div className="p-3.5 bg-gradient-to-br from-purple-50 via-slate-50 to-purple-50/50 border border-purple-200 rounded-xl space-y-3 mt-2">
+                      <div className="text-[11px] text-purple-950 font-medium leading-relaxed bg-white/70 p-2.5 rounded-lg border border-purple-200/60">
+                        💡 <strong>Monthly Retainer Owner:</strong> You promise a fixed monthly price to the owner. The system will track all customer booking revenue extracted out of this car and show the <strong>pending amount</strong> or <strong>100% surplus profit</strong> for Car Castle!
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-purple-950">Set Price for the Month (₹/mo)</Label>
+                        <Input
+                          type="number"
+                          value={form.monthly_amount}
+                          onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+                          placeholder="e.g. 30000"
+                          className="bg-white border-purple-300 font-tabular font-extrabold text-[#20373B]"
+                        />
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {["25000", "30000", "35000", "40000", "50000"].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => setForm({ ...form, monthly_amount: amt })}
+                              className={`text-[10px] px-2 py-0.5 rounded font-semibold border transition-all cursor-pointer ${
+                                form.monthly_amount === amt
+                                  ? "bg-purple-900 text-white border-purple-900"
+                                  : "bg-white border-purple-200 text-purple-900 hover:bg-purple-100"
+                              }`}
+                            >
+                              ₹{Number(amt).toLocaleString("en-IN")}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-purple-950">Car Model</Label>
+                          <Input
+                            value={form.car_model}
+                            onChange={(e) => setForm({ ...form, car_model: e.target.value })}
+                            placeholder="e.g. Ertiga ZXi"
+                            className="bg-white border-purple-200 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-purple-950">Registration Plate</Label>
+                          <Input
+                            value={form.car_registration}
+                            onChange={(e) => setForm({ ...form, car_registration: e.target.value.toUpperCase() })}
+                            placeholder="e.g. GA-07-M-9999"
+                            className="bg-white border-purple-200 text-xs font-mono uppercase"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-purple-950">Owner Benchmark Selling Rate (₹/day)</Label>
+                        <Input
+                          type="number"
+                          value={form.owner_selling_rate}
+                          onChange={(e) => setForm({ ...form, owner_selling_rate: e.target.value })}
+                          placeholder="e.g. 2500"
+                          className="bg-white border-purple-200 font-tabular text-xs"
+                        />
+                      </div>
+
+                      {Number(form.monthly_amount) > 0 && Number(form.owner_selling_rate) > 0 && (
+                        <div className="p-2.5 rounded-lg bg-white border border-purple-200 text-[11px] flex items-center justify-between text-purple-950 font-semibold shadow-2xs">
+                          <span>🎯 Target Break-Even:</span>
+                          <span className="text-emerald-700 font-bold font-tabular">
+                            {(Number(form.monthly_amount) / Number(form.owner_selling_rate)).toFixed(1)} Days to recover lease
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -247,6 +371,47 @@ export default function EntitiesPage({ type }) {
               {isOwner && Number(o.unsettled_expenses || 0) > 0 && (
                 <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
                   ⛽ -{formatInr(o.unsettled_expenses)} handover deductions
+                </div>
+              )}
+
+              {/* 📅 Monthly Retainer Car Performance & Profit Status */}
+              {isOwner && o.has_monthly_contract && (
+                <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-purple-50/90 via-slate-50 to-purple-50/40 border border-purple-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-purple-950 flex items-center gap-1 text-[11px]">
+                      <span>📅</span> Price Set for Month:
+                    </span>
+                    <span className="font-extrabold text-purple-900 bg-purple-100/90 px-2 py-0.5 rounded-md font-tabular text-xs">
+                      {formatInr(o.monthly_target)}/mo
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <span>Revenue Extracted Out of Car:</span>
+                    <strong className="text-[#20373B] font-extrabold font-tabular">{formatInr(o.extracted_revenue)}</strong>
+                  </div>
+
+                  <div className="pt-1.5 border-t border-purple-200/60 flex items-center justify-between text-[11px]">
+                    {o.is_surplus ? (
+                      <>
+                        <span className="font-bold text-emerald-800 flex items-center gap-1">
+                          <span>🎉</span> Surplus Profit (100%):
+                        </span>
+                        <span className="font-extrabold text-emerald-700 font-tabular text-xs">
+                          +{formatInr(o.surplus_amount)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-bold text-amber-900 flex items-center gap-1">
+                          <span>⏳</span> Amount Pending:
+                        </span>
+                        <span className="font-bold text-amber-800 font-tabular">
+                          {formatInr(o.pending_amount)}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
